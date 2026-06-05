@@ -716,9 +716,19 @@ public class SchedulerUI extends JFrame {
         }
         if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File f = fc.getSelectedFile();
+            long kb = f.length() / 1024;
+            int confirm = JOptionPane.showConfirmDialog(this,
+                    "<html><div style='padding:6px'>"
+                        + "<b>Konfirmasi file input</b><br><br>"
+                        + "<b>Nama:</b> " + f.getName() + "<br>"
+                        + "<b>Ukuran:</b> " + kb + " KB<br>"
+                        + "<b>Lokasi:</b> " + f.getParent() + "<br><br>"
+                        + "Apakah file ini sudah benar?"
+                        + "</div></html>",
+                    "Konfirmasi", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (confirm != JOptionPane.YES_OPTION) return;
             tfInputFile.setText(f.getAbsolutePath());
             tfInputFile.setForeground(C_TEXT);
-            long kb = f.length() / 1024;
             // Update label direktori input
             lblInputDir.setText("Direktori: " + f.getParent());
             lblInputDir.setForeground(C_INFO_TEXT);
