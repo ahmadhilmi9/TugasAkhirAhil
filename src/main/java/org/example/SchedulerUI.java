@@ -295,11 +295,11 @@ public class SchedulerUI extends JFrame {
         return card(p);
     }
 
-    /** Label kecil abu-abu untuk menampilkan path direktori. */
+    /** Label untuk menampilkan path direktori. */
     private JLabel dirLabel(String text) {
         JLabel l = new JLabel(text);
-        l.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        l.setForeground(C_MUTED);
+        l.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        l.setForeground(C_SUBTEXT);
         l.setAlignmentX(Component.LEFT_ALIGNMENT);
         return l;
     }
@@ -790,7 +790,21 @@ public class SchedulerUI extends JFrame {
                 schedulerTask.run();
             } catch (Exception ex) {
                 ex.printStackTrace();
-                markDone(false, "Exception: " + ex.getMessage());
+                String msg = ex.getMessage();
+                String exName = ex.getClass().getSimpleName();
+                boolean excelError = msg != null && (
+                        exName.contains("OfficeXml") ||
+                        exName.contains("POI") ||
+                        msg.toLowerCase().contains("excel") ||
+                        msg.toLowerCase().contains("workbook") ||
+                        msg.toLowerCase().contains(".xlsx") ||
+                        ex instanceof java.io.FileNotFoundException ||
+                        ex instanceof java.io.IOException);
+                if (excelError) {
+                    markDone(false, "EXCEL_ERROR:" + (msg != null ? msg : ""));
+                } else {
+                    markDone(false, "Exception: " + (msg != null ? msg : "Unknown error"));
+                }
             }
         }, "SchedulerThread");
         schedulerThread.setDaemon(true);
@@ -857,12 +871,28 @@ public class SchedulerUI extends JFrame {
                 instance.appendLog("=".repeat(52), C_MUTED);
                 instance.setStatus("Dihentikan  -  klik Generate untuk coba lagi", C_ERROR);
 
-                JOptionPane.showMessageDialog(instance,
-                        "<html><div style='padding:8px'>"
-                                + "<b style='font-size:14px;color:#dc2626'>Generate gagal atau dihentikan</b>"
-                                + "<br><br>Cek log untuk detail."
-                                + "</div></html>",
-                        "Gagal", JOptionPane.ERROR_MESSAGE);
+                boolean isExcelError = extraMessage != null && extraMessage.startsWith("EXCEL_ERROR:");
+                if (isExcelError) {
+                    JOptionPane.showMessageDialog(instance,
+                            "<html><div style='padding:8px'>"
+                                    + "<b style='font-size:14px;color:#dc2626'>File Excel Tidak Valid</b>"
+                                    + "<br><br>"
+                                    + "<div style='background:#FEF2F2;padding:10px;border-radius:6px;color:#991B1B;font-size:13px'>"
+                                    + "Format file Excel atau file Excel salah."
+                                    + "</div>"
+                                    + "<br>Pastikan file yang dipilih adalah:<br>"
+                                    + "\u2022 File .xlsx (bukan .xls)<br>"
+                                    + "\u2022 Format sesuai template yang ditentukan"
+                                    + "</div></html>",
+                            "Gagal", JOptionPane.ERROR_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(instance,
+                            "<html><div style='padding:8px'>"
+                                    + "<b style='font-size:14px;color:#dc2626'>Generate gagal atau dihentikan</b>"
+                                    + "<br><br>Cek log untuk detail."
+                                    + "</div></html>",
+                            "Gagal", JOptionPane.ERROR_MESSAGE);
+                }
             }
         });
     }
