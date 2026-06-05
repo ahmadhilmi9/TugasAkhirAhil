@@ -575,17 +575,21 @@ public class SchedulerUI extends JFrame {
 
     private JButton spinBtn(String text) {
         JButton b = new JButton(text);
-        b.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        b.setFont(new Font("Segoe UI", Font.BOLD, 15));
         b.setBackground(C_SPIN_BTN);
         b.setForeground(C_TEXT);
         b.setFocusPainted(false);
-        b.setBorderPainted(false);
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(C_BORDER, 1, true),
+                BorderFactory.createEmptyBorder(0, 5, 0, 5)));
         b.setOpaque(true);
-        b.setPreferredSize(new Dimension(26, 26));
+        b.setPreferredSize(new Dimension(28, 26));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         b.addMouseListener(new MouseAdapter() {
             @Override public void mouseEntered(MouseEvent e) { b.setBackground(new Color(209, 213, 219)); }
             @Override public void mouseExited(MouseEvent e)  { b.setBackground(C_SPIN_BTN); }
+            @Override public void mousePressed(MouseEvent e) { b.setBackground(new Color(165, 170, 180)); }
+            @Override public void mouseReleased(MouseEvent e) { b.setBackground(C_SPIN_BTN); }
         });
         return b;
     }
