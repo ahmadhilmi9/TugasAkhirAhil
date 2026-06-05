@@ -207,6 +207,7 @@ public class Main {
                     }
 
                 } else {
+                    // kalau pure angka langsung ambil
                     MGMPselasa.add(idGuruAsli);
                 }
             }
