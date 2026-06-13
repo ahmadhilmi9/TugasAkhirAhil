@@ -23,7 +23,7 @@ public class Main {
         iterasiGlobal[0] = 0;
         FileInputStream fis = new FileInputStream(SchedulerUI.inputFilePath);
         Workbook wb = new XSSFWorkbook(fis);
-        Sheet sheet = wb.getSheetAt(3);
+        Sheet sheet = wb.getSheetAt(0);
 
         //arraylist untuk menyimpan kebutuhan tugas mengajar guru
         ArrayList<String[]> kebutuhan = new ArrayList<>();
@@ -118,12 +118,12 @@ public class Main {
 
         wb.close();
 
-        // print data guru di arraylist kebutuhan
-        System.out.println("=== DATA GURU DAN BEBAN ===");
-        for (String[] d : kebutuhan) {
-            System.out.println(d[0] + " | " + d[1] + " | " + d[2] + " | " + d[3] + " | " + d[4]);
-        }
-        System.out.println("Total data: " + kebutuhan.size());
+//        // print data guru di arraylist kebutuhan
+//        System.out.println("=== DATA GURU DAN BEBAN ===");
+//        for (String[] d : kebutuhan) {
+//            System.out.println(d[0] + " | " + d[1] + " | " + d[2] + " | " + d[3] + " | " + d[4]);
+//        }
+//        System.out.println("Total data: " + kebutuhan.size());
 
         // menyimpan id gutu PJOK
         Set<String> guruPJOK = new HashSet<>();
@@ -318,56 +318,113 @@ public class Main {
         hariRange[4][0] = start;
         hariRange[4][1] = start + jumat - 1;
 
+
+        System.out.println("=== Daftar Tugas Mengajar Guru ===");
+        String[] allKelas = buatDaftarKelas();
+        for (String[] d : kebutuhan) {
+            int kIdx = Integer.parseInt(d[3]);
+            String namaKelas = (kIdx >= 0 && kIdx < allKelas.length) ? allKelas[kIdx] : d[3];
+            System.out.println(d[0] + " | " + d[1] + " | " + d[2] + " | " + namaKelas + " | " + d[4]);
+        }
+        System.out.println("Total data: " + kebutuhan.size());
+        int totalBeban = 0;
+        for (String[] d : kebutuhan) {
+            totalBeban += Integer.parseInt(d[4]);
+        }
+        System.out.println("Total beban awal: " + totalBeban);
+
+        System.out.println();
+        System.out.println("Memulai Initial Solution.....");
+
         //Memulai Initial Solution
         initialSolutionPJOK(kebutuhan, jadwal, hariRange);
 
         kebutuhan.sort((a, b) -> Integer.parseInt(a[4]) - Integer.parseInt(b[4]));
        //kebutuhan.sort((a, b) -> Integer.parseInt(b[4]) - Integer.parseInt(a[4]));
-        initialSolutionBlok3(kebutuhan, jadwal, hariRange);
+        //initialSolutionBlok3(kebutuhan, jadwal, hariRange);
         initialSolutionBlok2(kebutuhan, jadwal, hariRange);
         initialSolutionSwap2(kebutuhan, jadwal, hariRange, guruPJOK);
         initialSolutionBlok1(kebutuhan, jadwal, hariRange);
+        System.out.println("Initial Solution Berhasil");
 
-
-        System.out.println("=== DATA GURU DAN BEBAN ===");
+        System.out.println();
+        System.out.println("=== SISA BEBAN SETELAH INITIAL SOLUTION ===");
+        int totalSisa = 0;
         for (String[] d : kebutuhan) {
-            System.out.println(d[0] + " | " + d[1] + " | " + d[2] + " | " + d[3] + " | " + d[4]);
+            int sisa = Integer.parseInt(d[4]);
+            totalSisa += sisa;
+            int kIdx = Integer.parseInt(d[3]);
+            String namaKelas = (kIdx >= 0 && kIdx < allKelas.length) ? allKelas[kIdx] : d[3];
+            if (sisa > 0) {
+                System.out.println("[BELUM] " + d[0] + " | " + d[1] + " | " + d[2] + " | " + namaKelas + " | sisa: " + sisa);
+            } else {
+                System.out.println("[OK]    " + d[0] + " | " + d[1] + " | " + d[2] + " | " + namaKelas + " | sisa: 0");
+            }
         }
+        System.out.println("Total sisa beban: " + totalSisa);
         System.out.println("Total data: " + kebutuhan.size());
 
-        System.out.println("Penalti PJOK awal: " + hitungPenaltiPJOK(jadwal, hariRange, guruPJOK));
-
         long mulai = System.nanoTime();
-        //jadwal = hillClimbingRandomMGMPKamis(jadwal, hariRange, guruPJOK, MGMPkamis);
-       //jadwal = hillClimbingRandomHardConstrain(jadwal, hariRange, guruPJOK, MGMPkamis);
+
+        System.out.println();
+        System.out.println("Memulai optimasi....");
+        System.out.println("Memulai optimasi ID guru 43....");
+        jadwal = hillClimbingTabuGuru43(jadwal, hariRange, guruPJOK);
+        System.out.println();
+        System.out.println("Memulai optimasi Hard Constraint....");
+        jadwal = hillClimbingTabuHardConstrain(jadwal, hariRange, guruPJOK);
+        System.out.println();
+        System.out.println("Memulai optimasi Soft Constraint....");
+        jadwal =  LAHCTabuSoftConstrain(jadwal, hariRange, guruPJOK, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
+
+
+        //HillClimbingRandom
+       //jadwal = hillClimbingRandomHardConstrain(jadwal, hariRange, guruPJOK);
        //jadwal = hillClimbingRandomSoftConstrain(jadwal, hariRange, guruPJOK, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
-        // jadwal = LAHCRandomHardConstrain(jadwal, hariRange,guruPJOK);
-        System.out.println("Penalti PJOK: " + hitungPenaltiPJOK(jadwal, hariRange, guruPJOK));
-        System.out.println("Penalti guru ID 43: " + hitungPenaltiGuruID43(jadwal, hariRange));
-        System.out.println("Penalti MGMP Senin: " + hitungPenaltiMGMPSenin(jadwal, hariRange, MGMPsenin));
-        System.out.println("Penalti MGMP Selasa: " + hitungPenaltiMGMPSelasa(jadwal, hariRange, MGMPselasa));
-        System.out.println("Penalti MGMP Rabu: " + hitungPenaltiMGMPRabu(jadwal, hariRange, MGMPrabu));
-        System.out.println("Penalti MGMP Kamis: " + hitungPenaltiMGMPKamis(jadwal, hariRange, MGMPkamis));
-        System.out.println("Penalti MGMP awal: " + hitungTotalPenaltiMGMP(jadwal, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis));
-        System.out.println("Penalti Matematika: " + hitungPenaltiMatematika(jadwal, hariRange, guruMatematika));
-        System.out.println("Penalti jam 9&10: " + hitungPenaltiJam9dan10(jadwal, hariRange, 5));
-        System.out.println("Penalti bentrok: " + hitungBentrok(jadwal));
-        System.out.println("Penalti max jam per hari: " + hitungPenaltiMaxJamPerHari(jadwal, hariRange, 8));
-        System.out.println("Penalti total awal: " + hitungTotalSemuaPenalti(jadwal,
+
+       //HillClimbingTabu
+//        jadwal = hillClimbingTabuGuru43(jadwal, hariRange, guruPJOK);
+//        jadwal = hillClimbingTabuHardConstrain(jadwal, hariRange, guruPJOK);
+        //jadwal = hillClimbingTabuSoftConstrain(jadwal, hariRange, guruPJOK, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
+
+        // OPTIMASI FIX
+        //jadwal = hillClimbingTabuGuru43(jadwal, hariRange, guruPJOK);
+        //jadwal = hillClimbingTabuHardConstrain(jadwal, hariRange, guruPJOK);
+        //jadwal =  LAHCTabuSoftConstrain(jadwal, hariRange, guruPJOK, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
+
+        System.out.println();
+        System.out.println("=== Daftar Pelanggaran ===");
+        System.out.println("Pelanggaran PJOK: " + hitungPenaltiPJOK(jadwal, hariRange, guruPJOK));
+        System.out.println("Pelanggaran guru ID 43: " + hitungPenaltiGuruID43(jadwal, hariRange));
+        System.out.println("Pelanggaran MGMP Senin: " + hitungPenaltiMGMPSenin(jadwal, hariRange, MGMPsenin));
+        System.out.println("Pelanggaran MGMP Selasa: " + hitungPenaltiMGMPSelasa(jadwal, hariRange, MGMPselasa));
+        System.out.println("Pelanggaran MGMP Rabu: " + hitungPenaltiMGMPRabu(jadwal, hariRange, MGMPrabu));
+        System.out.println("Pelanggaran MGMP Kamis: " + hitungPenaltiMGMPKamis(jadwal, hariRange, MGMPkamis));
+        System.out.println("Pelanggaran MGMP awal total: " + hitungTotalPenaltiMGMP(jadwal, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis));
+        System.out.println("Pelanggaran Matematika: " + hitungPenaltiMatematika(jadwal, hariRange, guruMatematika));
+        System.out.println("Pelanggaran jam 9&10: " + hitungPenaltiJam9dan10(jadwal, hariRange, 5));
+        System.out.println("Pelanggaran bentrok: " + hitungBentrok(jadwal));
+        System.out.println("Pelanggaran max jam per hari: " + hitungPenaltiMaxJamPerHari(jadwal, hariRange, 8, 2));
+        System.out.println("Pelanggaran total awal: " + hitungTotalSemuaPenalti(jadwal,
                 hariRange,
                 guruPJOK,
                 MGMPsenin,
                 MGMPselasa,
                 MGMPrabu,
                 MGMPkamis,
-                guruMatematika));
+                guruMatematika))
+        ;
         long end = System.nanoTime();
 
-        double durasiMenit = (end - mulai) / 1_000_000_000.0 / 60.0;
-        System.out.println("Waktu eksekusi: " + durasiMenit + " menit");
+        double durasiDetik = (end - mulai) / 1_000_000_000.0;
+        if (durasiDetik < 60) {
+            System.out.println("Waktu eksekusi: " + String.format("%.2f", durasiDetik) + " detik");
+        } else {
+            double durasiMenit = durasiDetik / 60.0;
+            System.out.println("Waktu eksekusi: " + String.format("%.2f", durasiMenit) + " menit");
+        }
         exportJadwalToExcel(jadwal, hariRange, SchedulerUI.outputFilePath, kebutuhan);
         SchedulerUI.markDone(true, null);
-//       SchedulerUI.markDone(true, "» File berhasil disimpan: " + SchedulerUI.outputFilePath);
 
 
     }
@@ -513,7 +570,7 @@ public class Main {
 
             masihAda = false;
 
-            for (int i = 0; i < kebutuhan.size(); i++) {
+            for (int i = 0; i < kebutuhan.size(); i+=3) {
 
                 String[] data = kebutuhan.get(i);
 
@@ -523,7 +580,7 @@ public class Main {
                 int beban     = Integer.parseInt(data[4]);
 
                 if (beban != 3 && beban != 5) continue;
-                if (!mapel.equalsIgnoreCase("MATEMATIKA") && !mapel.equalsIgnoreCase("IPA")) continue;
+                //if (!mapel.equalsIgnoreCase("MATEMATIKA") && !mapel.equalsIgnoreCase("IPA")) continue ;
 
 
                 int ukuranBlok = 3;
@@ -1163,8 +1220,7 @@ public class Main {
         final String[] JAM_KE     = {null,"1","2","3","4",null,"5","6",null,"7","8","9","10"};
         final String[] LBL_KHUSUS = {"Sholat Dhuha",null,null,null,null,"Istirahat",null,null,"Sholat Zuhur",null,null,null,null};
         final String[] NAMA_HARI  = {"SENIN","SELASA","RABU","KAMIS","JUMAT"};
-
-        int barisPer = WAKTU_BARIS.length; // 13
+        final int barisPer = WAKTU_BARIS.length; // 13
 
         String[] allKelas = buatDaftarKelas();
 
@@ -1178,298 +1234,152 @@ public class Main {
         List<String> guruList = new ArrayList<>(guruMap.keySet());
         guruList.sort(Comparator.comparingInt(Integer::parseInt));
 
-        // Reset sheet
+        // Map guruNum+kelasIdx -> mapel (untuk lookup mata pelajaran per kelas)
+        Map<String, String> guruKelasMapel = new HashMap<>();
+        for (String[] data : kebutuhan) {
+            String num = data[0].replaceAll("[^0-9]","");
+            try {
+                int kIdx = Integer.parseInt(data[3]);
+                guruKelasMapel.put(num+"|"+kIdx, data[2]);
+            } catch (Exception ignored) {}
+        }
+
+        // Hapus sheet lama jika ada
         int ex = wb.getSheetIndex("Jadwal Guru");
         if (ex >= 0) wb.removeSheetAt(ex);
-        XSSFSheet sheet = wb.createSheet("Jadwal Guru");
-        sheet.setDefaultRowHeightInPoints(14);
+        ex = wb.getSheetIndex("DataGuru");
+        if (ex >= 0) wb.removeSheetAt(ex);
+        ex = wb.getSheetIndex("VBACode");
+        if (ex >= 0) wb.removeSheetAt(ex);
 
-        // Font
-        XSSFFont fN = guruFont(wb, 10, false);
-        XSSFFont fB = guruFont(wb, 10, true);
-        XSSFFont fL = guruFont(wb, 12, true);
-
-        // Lebar kolom: HARI|JAM|WAKTU|KLS|MAPEL|GAP|HARI|JAM|WAKTU|KLS|MAPEL
-        int[] cw = {8,4,16,5,20,2,8,4,16,5,20};
-        for (int i = 0; i < cw.length; i++) sheet.setColumnWidth(i, cw[i]*256);
-
-        int rowIdx = 0;
-
-        // Judul
-        Row rJ = sheet.createRow(rowIdx++); rJ.setHeightInPoints(18);
-        guruCell(wb, rJ, 0, "TAHUN AJARAN 2025-2026", fL, WHITE, HorizontalAlignment.CENTER, false, false);
-        sheet.addMergedRegion(new CellRangeAddress(0,0,0,10));
-
-        // Info guru (baris 1-3)
-        String[] lblInfo = {"KODE GURU","NAMA GURU","JML MENGAJAR"};
-        for (int i = 0; i < 3; i++) {
-            Row r = sheet.createRow(rowIdx++); r.setHeightInPoints(20);
-            guruCell(wb, r, 0, lblInfo[i], fB, WHITE, HorizontalAlignment.LEFT,   false, false);
-            guruCell(wb, r, 1, ":",        fB, WHITE, HorizontalAlignment.CENTER, false, false);
-            guruCell(wb, r, 2, "",         fL, WHITE, HorizontalAlignment.LEFT,   false, false);
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 2, 10));
-        }
-        // Tombol navigasi
-        sheet.getRow(1).createCell(10).setCellValue("▲");
-        sheet.getRow(1).getCell(10).setCellStyle(guruStyle(wb, fB, "DDDDDD", HorizontalAlignment.CENTER, false, true));
-        sheet.getRow(2).createCell(10).setCellValue("▼");
-        sheet.getRow(2).getCell(10).setCellStyle(guruStyle(wb, fB, "DDDDDD", HorizontalAlignment.CENTER, false, true));
-
-        // Header jadwal (2 baris)
-        Row rH1 = sheet.createRow(rowIdx++); rH1.setHeightInPoints(14);
-        guruCell(wb, rH1, 0, "HARI",          fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH1, 1, "JADWAL",        fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        sheet.addMergedRegion(new CellRangeAddress(rowIdx-1,rowIdx-1,1,2));
-        guruCell(wb, rH1, 3, "KLS",           fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH1, 4, "MATA PELAJARAN",fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH1, 5, "",              fB, WHITE, HorizontalAlignment.CENTER, false, false);
-        guruCell(wb, rH1, 6, "HARI",          fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH1, 7, "JADWAL",        fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        sheet.addMergedRegion(new CellRangeAddress(rowIdx-1,rowIdx-1,7,8));
-        guruCell(wb, rH1, 9, "KLS",           fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH1,10, "MATA PELAJARAN",fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-
-        Row rH2 = sheet.createRow(rowIdx++); rH2.setHeightInPoints(14);
-        guruCell(wb, rH2, 0, "",      fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH2, 1, "JAM",  fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH2, 2, "WAKTU",fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH2, 3, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH2, 4, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH2, 5, "",     fB, WHITE, HorizontalAlignment.CENTER, false, false);
-        guruCell(wb, rH2, 6, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH2, 7, "JAM",  fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH2, 8, "WAKTU",fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH2, 9, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        guruCell(wb, rH2,10, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-        for (int c : new int[]{0,3,4,5,6,9,10})
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx-2,rowIdx-1,c,c));
-
-        int dataRowStart = rowIdx;
-
-        // Hitung jam aktual tiap hari
-        int[] jamAktualPerHari = new int[hariRange.length];
-        for (int h = 0; h < hariRange.length; h++)
-            jamAktualPerHari[h] = hariRange[h][1] - hariRange[h][0] + 1;
-
-        int GAP = 2; // baris kosong antar hari
-
-// Helper inline: hitung baris yang dipakai untuk jam aktual tertentu
-// Logika: iterasi JAM_KE[], hitung baris sampai jam ke-N terpenuhi
-// Baris istirahat/sholat TETAP dihitung selama masih dalam range jam
-// --------------------------------------------------------
-// Contoh: jam=9 → baris 0(Dhuha) 1 2 3 4 [Ist] 5 6 [SholZhur] 7 8 9 = 11 baris
-// Contoh: jam=8 → baris 0(Dhuha) 1 2 3 4 [Ist] 5 6 [SholZhur] 7 8    = 10 baris
-// Contoh: jam=10→ semua 13 baris
-
-// Fungsi getBarisPakai sudah ada sebagai helper method terpisah
-// Pastikan helper method ini ada:
-// private static int getBarisPakai(int jamAktual, String[] JAM_KE, int barisPer)
-
-// =====================
-// Hitung posisi start KIRI (Senin=0, Selasa=1, Rabu=2)
-// =====================
-        int[] kiriStart = new int[3];
-        int cursorKiri = rowIdx;
-        for (int h = 0; h < 3; h++) {
-            kiriStart[h] = cursorKiri;
-            cursorKiri += getBarisPakai(jamAktualPerHari[h], JAM_KE, barisPer) + GAP;
-        }
-
-// =====================
-// Hitung posisi start KANAN (Kamis=3, Jumat=4)
-// =====================
-        int[] kananStart = new int[2];
-        int cursorKanan = rowIdx;
-        for (int h = 0; h < 2; h++) {
-            kananStart[h] = cursorKanan;
-            cursorKanan += getBarisPakai(jamAktualPerHari[h+3], JAM_KE, barisPer) + GAP;
-        }
-
-// Total baris keseluruhan
-        int totalBarisKiri  = cursorKiri  - GAP - rowIdx; // hapus GAP terakhir
-        int totalBarisKanan = cursorKanan - GAP - rowIdx;
-        int totalBaris = Math.max(totalBarisKiri, totalBarisKanan);
-
-// Buat semua baris kosong dulu (tanpa border)
-        for (int b = 0; b < totalBaris + GAP; b++) {
-            Row row = sheet.createRow(rowIdx + b);
-            row.setHeightInPoints(14);
-            for (int c = 0; c <= 10; c++)
-                guruCell(wb, row, c, "", fN, WHITE, HorizontalAlignment.CENTER, false, false);
-        }
-
-// =====================
-// ISI KIRI: Senin(0), Selasa(1), Rabu(2)
-// =====================
-        for (int h = 0; h < 3; h++) {
-            int base    = kiriStart[h];
-            int jam     = jamAktualPerHari[h];
-            int barisPakai = getBarisPakai(jam, JAM_KE, barisPer);
-
-            // Merge kolom HARI vertikal
-            guruCell(wb, sheet.getRow(base), 0, NAMA_HARI[h], fB, LGRAY,
-                    HorizontalAlignment.CENTER, true, true);
-            if (barisPakai > 1)
-                sheet.addMergedRegion(new CellRangeAddress(base, base+barisPakai-1, 0, 0));
-
-            int jamKe = 0;
-            int bRow  = 0; // index baris relatif dalam kotak ini
-            for (int b = 0; b < barisPer; b++) {
-                // Cek apakah jam sudah habis
-                if (JAM_KE[b] != null) {
-                    if (jamKe >= jam) break; // stop, jam sudah cukup
-                    jamKe++;
-                } else {
-                    // Baris istirahat/sholat: tampilkan hanya jika jam berikutnya masih ada
-                    // Cek apakah masih ada jam setelah baris ini
-                    boolean adaJamBerikut = false;
-                    for (int nb = b+1; nb < barisPer; nb++) {
-                        if (JAM_KE[nb] != null && jamKe < jam) { adaJamBerikut = true; break; }
-                    }
-                    if (!adaJamBerikut) break; // tidak perlu tampilkan istirahat di akhir
-                }
-
-                Row row = sheet.getRow(base + bRow);
-                if (LBL_KHUSUS[b] != null) {
-                    guruCell(wb, row, 1, "",              fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 2, WAKTU_BARIS[b],  fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 3, LBL_KHUSUS[b],   fB, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 4, "",              fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    sheet.addMergedRegion(new CellRangeAddress(base+bRow, base+bRow, 3, 4));
-                } else {
-                    guruCell(wb, row, 1, JAM_KE[b],       fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 2, WAKTU_BARIS[b],  fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 3, "",              fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 4, "",              fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                }
-                bRow++;
-            }
-        }
-
-// =====================
-// ISI KANAN: Kamis(3), Jumat(4)
-// =====================
-        for (int h = 0; h < 2; h++) {
-            int base    = kananStart[h];
-            int jam     = jamAktualPerHari[h+3];
-            int barisPakai = getBarisPakai(jam, JAM_KE, barisPer);
-
-            // Merge kolom HARI vertikal
-            guruCell(wb, sheet.getRow(base), 6, NAMA_HARI[h+3], fB, LGRAY,
-                    HorizontalAlignment.CENTER, true, true);
-            if (barisPakai > 1)
-                sheet.addMergedRegion(new CellRangeAddress(base, base+barisPakai-1, 6, 6));
-
-            int jamKe = 0;
-            int bRow  = 0;
-            for (int b = 0; b < barisPer; b++) {
-                if (JAM_KE[b] != null) {
-                    if (jamKe >= jam) break;
-                    jamKe++;
-                } else {
-                    boolean adaJamBerikut = false;
-                    for (int nb = b+1; nb < barisPer; nb++) {
-                        if (JAM_KE[nb] != null && jamKe < jam) { adaJamBerikut = true; break; }
-                    }
-                    if (!adaJamBerikut) break;
-                }
-
-                Row row = sheet.getRow(base + bRow);
-                if (row == null) row = sheet.createRow(base + bRow);
-
-                if (LBL_KHUSUS[b] != null) {
-                    guruCell(wb, row, 7, "",              fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 8, WAKTU_BARIS[b],  fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 9, LBL_KHUSUS[b],   fB, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row,10, "",              fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    sheet.addMergedRegion(new CellRangeAddress(base+bRow, base+bRow, 9, 10));
-                } else {
-                    guruCell(wb, row, 7, JAM_KE[b],       fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 8, WAKTU_BARIS[b],  fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 9, "",              fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row,10, "",              fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                }
-                bRow++;
-            }
-        }
-        // Isi border untuk baris 26-38 di kolom kanan (yang tidak terpakai)
-        for (int b = barisPer*2; b < barisPer*3; b++) {
-            Row row = sheet.getRow(rowIdx + b);
-            if (row == null) row = sheet.createRow(rowIdx + b);
-            for (int c : new int[]{6,7,8,9,10})
-                guruCell(wb, row, c, "", fN, WHITE, HorizontalAlignment.CENTER, true, true);
-        }
-
-        // DataGuru sheet tersembunyi
-        int exD = wb.getSheetIndex("DataGuru");
-        if (exD >= 0) wb.removeSheetAt(exD);
-        XSSFSheet ds = wb.createSheet("DataGuru");
-        wb.setSheetHidden(wb.getSheetIndex("DataGuru"), true);
-
-        Row dHdr = ds.createRow(0);
-        dHdr.createCell(0).setCellValue("KodeGuru");
-        dHdr.createCell(1).setCellValue("NamaGuru");
-        dHdr.createCell(2).setCellValue("Mapel");
-        dHdr.createCell(3).setCellValue("TotalJam");
-        int co = 4;
-        for (int h = 0; h < hariRange.length; h++)
-            for (int b = 0; b < barisPer; b++)
-                dHdr.createCell(co++).setCellValue("H"+h+"B"+b);
-
-        int dri = 1;
+        // Buat satu sheet untuk setiap guru
         for (String guruNum : guruList) {
             String[] info = guruMap.get(guruNum);
-            Row dr = ds.createRow(dri++);
-            dr.createCell(0).setCellValue(guruNum);
-            dr.createCell(1).setCellValue(info[0]);
-            dr.createCell(2).setCellValue(info[1]);
+            String namaGuru = info[0];
 
-            int totalJam = 0, col2 = 4;
+            // Hitung total jam mengajar guru ini
+            int totalJam = 0;
             for (int h = 0; h < hariRange.length; h++) {
                 int start = hariRange[h][0], end = hariRange[h][1];
-                int[] jb = new int[barisPer]; Arrays.fill(jb,-1);
-                int jIdx = start;
-                for (int b = 0; b < barisPer; b++)
-                    if (JAM_KE[b] != null && jIdx <= end) jb[b] = jIdx++;
+                for (int r = start; r <= end; r++) {
+                    for (int k = 0; k < allKelas.length; k++) {
+                        if (k < jadwal[r].length) {
+                            String isi = jadwal[r][k];
+                            if (isi != null && !isi.isEmpty() && isi.replaceAll("[^0-9]","").equals(guruNum)) {
+                                totalJam++;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            String sheetName = "Guru " + guruNum + " - " + namaGuru;
+            int si = wb.getSheetIndex(sheetName);
+            if (si >= 0) wb.removeSheetAt(si);
+            XSSFSheet sheet = wb.createSheet(sheetName);
+            sheet.setDefaultRowHeightInPoints(14);
+
+            XSSFFont fN = guruFont(wb, 10, false);
+            XSSFFont fB = guruFont(wb, 10, true);
+
+            int[] cw = {8,5,16,10,30};
+            for (int i = 0; i < cw.length; i++) sheet.setColumnWidth(i, cw[i]*256);
+
+            int rowIdx = 0;
+
+            // Header info guru (3 baris)
+            Row r1 = sheet.createRow(rowIdx++); r1.setHeightInPoints(20);
+            guruCell(wb, r1, 0, "KODE GURU", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+            guruCell(wb, r1, 1, ":",          fB, WHITE, HorizontalAlignment.CENTER, false, false);
+            guruCell(wb, r1, 2, guruNum,      fB, WHITE, HorizontalAlignment.LEFT, false, false);
+
+            Row r2 = sheet.createRow(rowIdx++); r2.setHeightInPoints(20);
+            guruCell(wb, r2, 0, "NAMA GURU", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+            guruCell(wb, r2, 1, ":",          fB, WHITE, HorizontalAlignment.CENTER, false, false);
+            guruCell(wb, r2, 2, namaGuru,     fB, WHITE, HorizontalAlignment.LEFT, false, false);
+
+            Row r3 = sheet.createRow(rowIdx++); r3.setHeightInPoints(20);
+            guruCell(wb, r3, 0, "JUMLAH MENGAJAR", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+            guruCell(wb, r3, 1, ":",               fB, WHITE, HorizontalAlignment.CENTER, false, false);
+            guruCell(wb, r3, 2, totalJam + " JAM", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+
+            rowIdx++; // spasi
+
+            // Header tabel
+            Row rH = sheet.createRow(rowIdx++); rH.setHeightInPoints(16);
+            guruCell(wb, rH, 0, "HARI",          fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 1, "JAM",           fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 2, "WAKTU",         fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 3, "KLS",           fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 4, "MATA PELAJARAN",fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+
+            // Tabel jadwal per hari
+            for (int h = 0; h < hariRange.length; h++) {
+                int start    = hariRange[h][0];
+                int end      = hariRange[h][1];
+                int jamAktual = end - start + 1;
+
+                int startRow = rowIdx;
+                int jamKe = 0;
+                int bRow  = 0;
 
                 for (int b = 0; b < barisPer; b++) {
-                    String val = "";
-                    if (jb[b] >= 0) {
+                    if (JAM_KE[b] != null) {
+                        if (jamKe >= jamAktual) break;
+                        jamKe++;
+                    } else {
+                        boolean adaJamBerikut = false;
+                        for (int nb = b+1; nb < barisPer; nb++) {
+                            if (JAM_KE[nb] != null && jamKe < jamAktual) { adaJamBerikut = true; break; }
+                        }
+                        if (!adaJamBerikut) break;
+                    }
+
+                    Row row = sheet.createRow(rowIdx++);
+                    row.setHeightInPoints(14);
+
+                    if (LBL_KHUSUS[b] != null) {
+                        guruCell(wb, row, 0, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 1, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, WAKTU_BARIS[b],   fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 3, LBL_KHUSUS[b],    fB, CYAN, HorizontalAlignment.CENTER, true, true);
+                        sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 3, 4));
+                        guruCell(wb, row, 4, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                    } else {
+                        int slot = start + jamKe - 1;
+                        String kelas = "";
+                        String mapel = "";
                         for (int k = 0; k < allKelas.length; k++) {
-                            if (k < jadwal[jb[b]].length) {
-                                String isi = jadwal[jb[b]][k];
+                            if (slot < jadwal.length && k < jadwal[slot].length) {
+                                String isi = jadwal[slot][k];
                                 if (isi != null && !isi.isEmpty() && isi.replaceAll("[^0-9]","").equals(guruNum)) {
-                                    val = allKelas[k]+"|"+info[1];
-                                    totalJam++;
+                                    kelas = allKelas[k];
+                                    mapel = guruKelasMapel.getOrDefault(guruNum + "|" + k, "");
                                     break;
                                 }
                             }
                         }
+                        guruCell(wb, row, 0, "",        fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 1, JAM_KE[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, WAKTU_BARIS[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 3, kelas,    fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 4, mapel,    fN, WHITE, HorizontalAlignment.LEFT, true, true);
                     }
-                    dr.createCell(col2++).setCellValue(val);
+                    bRow++;
                 }
+
+                // Merge kolom HARI vertikal
+                if (startRow < rowIdx) {
+                    sheet.addMergedRegion(new CellRangeAddress(startRow, rowIdx-1, 0, 0));
+                    sheet.getRow(startRow).getCell(0).setCellValue(NAMA_HARI[h]);
+                    sheet.getRow(startRow).getCell(0).setCellStyle(guruStyle(wb, fB, LGRAY, HorizontalAlignment.CENTER, true, true));
+                }
+
+                // Spasi antar hari
+                sheet.createRow(rowIdx++).setHeightInPoints(6);
             }
-            dr.createCell(3).setCellValue(totalJam);
         }
-
-        // Isi guru pertama langsung
-        if (!guruList.isEmpty()) {
-            Row dr = ds.getRow(1);
-            sheet.getRow(1).getCell(2).setCellValue(dr.getCell(0).getStringCellValue());
-            sheet.getRow(2).getCell(2).setCellValue(dr.getCell(1).getStringCellValue());
-            sheet.getRow(3).getCell(2).setCellValue((int)dr.getCell(3).getNumericCellValue()+" JAM");
-            isiDataGuruKeSheet(sheet, ds, 1, dataRowStart, barisPer, JAM_KE, LBL_KHUSUS, hariRange);
-        }
-
-        // VBACode config
-        int vi = wb.getSheetIndex("VBACode");
-        if (vi >= 0) wb.removeSheetAt(vi);
-        XSSFSheet vs = wb.createSheet("VBACode");
-        wb.setSheetHidden(wb.getSheetIndex("VBACode"), true);
-        vs.createRow(0).createCell(0).setCellValue("config");
-        vs.createRow(1).createCell(0).setCellValue(dataRowStart+1); // startRow 1-indexed
-        vs.createRow(2).createCell(0).setCellValue(barisPer*3);     // totalBaris
-        vs.createRow(3).createCell(0).setCellValue(barisPer);       // barisPer
     }
     // Helper: hitung berapa baris yang dipakai untuk sejumlah jam aktual
     private static int getBarisPakai(int jamAktual, String[] JAM_KE, int barisPer) {
@@ -1495,59 +1405,6 @@ public class Main {
         return baris;
     }
 
-    private static void isiDataGuruKeSheet(XSSFSheet sheet, XSSFSheet ds, int dsRow,
-                                           int dataRowStart, int barisPer,
-                                           String[] JAM_KE, String[] LBL_KHUSUS,
-                                           int[][] hariRange) { // <-- tambah parameter ini
-        Row dr = ds.getRow(dsRow);
-        if (dr == null) return;
-
-        for (int h = 0; h < 3; h++) {
-            int base = dataRowStart + h*barisPer;
-            int jamAktual = hariRange[h][1] - hariRange[h][0] + 1; // <-- hitung jam aktual hari ini
-
-            int jamKe = 0; // <-- counter jam KBM aktual
-            for (int b = 0; b < barisPer; b++) {
-                if (LBL_KHUSUS[b] != null) continue;
-                jamKe++; // <-- tambah tiap ketemu jam KBM
-
-                Cell dc = dr.getCell(4 + h*barisPer + b);
-                String val = (dc != null) ? dc.getStringCellValue() : "";
-
-                // Jika jam ini melebihi jam aktual hari → kosongkan
-                if (jamKe > jamAktual) val = ""; // <-- ini yang baru
-
-                Row row = sheet.getRow(base+b); if (row == null) continue;
-                // Selalu set value (kosong atau isi) supaya baris sebelumnya tidak tersisa
-                String[] p = val.isEmpty() ? new String[]{"",""} : val.split("\\|",2);
-                row.getCell(3).setCellValue(p[0]);
-                row.getCell(4).setCellValue(p.length>1?p[1]:"");
-            }
-        }
-
-        for (int h = 3; h < 5; h++) {
-            int base = dataRowStart + (h-3)*barisPer;
-            int jamAktual = hariRange[h][1] - hariRange[h][0] + 1; // <-- hitung jam aktual hari ini
-
-            int jamKe = 0; // <-- counter jam KBM aktual
-            for (int b = 0; b < barisPer; b++) {
-                if (LBL_KHUSUS[b] != null) continue;
-                jamKe++; // <-- tambah tiap ketemu jam KBM
-
-                Cell dc = dr.getCell(4 + h*barisPer + b);
-                String val = (dc != null) ? dc.getStringCellValue() : "";
-
-                // Jika jam ini melebihi jam aktual hari → kosongkan
-                if (jamKe > jamAktual) val = ""; // <-- ini yang baru
-
-                Row row = sheet.getRow(base+b); if (row == null) continue;
-                String[] p = val.isEmpty() ? new String[]{"",""} : val.split("\\|",2);
-                row.getCell(9).setCellValue(p[0]);
-                row.getCell(10).setCellValue(p.length>1?p[1]:"");
-            }
-        }
-    }
-
     // =======================================================================
 // SHEET JADWAL KELAS
 // =======================================================================
@@ -1566,149 +1423,9 @@ public class Main {
         final String[] JAM_KE     = {null,"1","2","3","4",null,"5","6",null,"7","8","9","10"};
         final String[] LBL_KHUSUS = {"Sholat Dhuha",null,null,null,null,"Istirahat",null,null,"Sholat Zuhur",null,null,null,null};
         final String[] NAMA_HARI  = {"SENIN","SELASA","RABU","KAMIS","JUMAT"};
-        final int[][] PANEL_HARI  = {{0,1},{2,3},{4,-1}};
+        final int barisPer = WAKTU_BARIS.length;
 
-        int barisPer = WAKTU_BARIS.length;
-
-        List<String> kelasList = new ArrayList<>();
-        for (String k : buatDaftarKelas()) kelasList.add(k);
-        int totalKelas = kelasList.size();
-
-        // Reset sheet
-        int ex = wb.getSheetIndex("Jadwal Kelas");
-        if (ex >= 0) wb.removeSheetAt(ex);
-        XSSFSheet sheet = wb.createSheet("Jadwal Kelas");
-        sheet.setDefaultRowHeightInPoints(14);
-
-        XSSFFont fN = guruFont(wb, 9,  false);
-        XSSFFont fB = guruFont(wb, 9,  true);
-        XSSFFont fL = guruFont(wb, 11, true);
-
-        int[] cw = {7,4,15,14,22,2,7,4,15,14,22};
-        for (int i = 0; i < cw.length; i++) sheet.setColumnWidth(i, cw[i]*256);
-
-        int rowIdx = 0;
-
-        // Judul
-        Row rJ1 = sheet.createRow(rowIdx++); rJ1.setHeightInPoints(16);
-        guruCell(wb, rJ1, 0, "JADWAL PELAJARAN SEMESTER GANJIL", fL, WHITE, HorizontalAlignment.CENTER, false, false);
-        sheet.addMergedRegion(new CellRangeAddress(0,0,0,10));
-        Row rJ2 = sheet.createRow(rowIdx++); rJ2.setHeightInPoints(16);
-        guruCell(wb, rJ2, 0, "TAHUN AJARAN 2025-2026", fL, WHITE, HorizontalAlignment.CENTER, false, false);
-        sheet.addMergedRegion(new CellRangeAddress(1,1,0,10));
-
-        // Info kelas (baris 2-3)
-        String[] lblInfo = {"KELAS","WALI KELAS"};
-        for (int i = 0; i < 2; i++) {
-            Row r = sheet.createRow(rowIdx++); r.setHeightInPoints(20);
-            guruCell(wb, r, 0, lblInfo[i], fB, WHITE, HorizontalAlignment.LEFT,   false, false);
-            guruCell(wb, r, 1, ":",        fB, WHITE, HorizontalAlignment.CENTER, false, false);
-            guruCell(wb, r, 2, "",         fL, WHITE, HorizontalAlignment.LEFT,   false, false);
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 2, 10));
-        }
-        // Tombol navigasi
-        sheet.getRow(2).createCell(10).setCellValue("▲");
-        sheet.getRow(2).getCell(10).setCellStyle(guruStyle(wb, fB, "DDDDDD", HorizontalAlignment.CENTER, false, true));
-        sheet.getRow(3).createCell(10).setCellValue("▼");
-        sheet.getRow(3).getCell(10).setCellStyle(guruStyle(wb, fB, "DDDDDD", HorizontalAlignment.CENTER, false, true));
-
-        int dataRowStart = rowIdx;
-        int panelH = 2 + barisPer + 1; // header(2) + data(13) + spasi(1)
-
-        // Buat 3 panel
-        for (int p = 0; p < 3; p++) {
-            int hKiri  = PANEL_HARI[p][0];
-            int hKanan = PANEL_HARI[p][1];
-
-            // Header panel
-            Row h1 = sheet.createRow(rowIdx++); h1.setHeightInPoints(14);
-            guruCell(wb, h1, 0, "HARI",        fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h1, 1, "JADWAL",      fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx-1,rowIdx-1,1,2));
-            guruCell(wb, h1, 3, "MAPEL",       fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h1, 4, "NAMA GURU",   fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h1, 5, "",            fB, WHITE, HorizontalAlignment.CENTER, false, false);
-            guruCell(wb, h1, 6, "HARI",        fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h1, 7, "JADWAL",      fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx-1,rowIdx-1,7,8));
-            guruCell(wb, h1, 9, "MAPEL",       fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h1,10, "NAMA GURU",   fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-
-            Row h2 = sheet.createRow(rowIdx++); h2.setHeightInPoints(14);
-            guruCell(wb, h2, 0, "",      fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h2, 1, "JAM",  fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h2, 2, "WAKTU",fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h2, 3, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h2, 4, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h2, 5, "",     fB, WHITE, HorizontalAlignment.CENTER, false, false);
-            guruCell(wb, h2, 6, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h2, 7, "JAM",  fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h2, 8, "WAKTU",fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h2, 9, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            guruCell(wb, h2,10, "",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
-            for (int c : new int[]{0,3,4,5,6,9,10})
-                sheet.addMergedRegion(new CellRangeAddress(rowIdx-2,rowIdx-1,c,c));
-
-            int dataStart = rowIdx;
-
-            // 13 baris data
-            for (int b = 0; b < barisPer; b++) {
-                Row row = sheet.createRow(rowIdx++); row.setHeightInPoints(14);
-                guruCell(wb, row, 5, "", fN, WHITE, HorizontalAlignment.CENTER, false, false);
-                if (LBL_KHUSUS[b] != null) {
-                    guruCell(wb, row, 0, "",            fN, CYAN, HorizontalAlignment.CENTER, false, true);
-                    guruCell(wb, row, 1, "",            fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 2, WAKTU_BARIS[b],fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 3, LBL_KHUSUS[b], fB, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 4, "",            fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    sheet.addMergedRegion(new CellRangeAddress(rowIdx-1,rowIdx-1,3,4));
-                    guruCell(wb, row, 6, "",            fN, CYAN, HorizontalAlignment.CENTER, false, true);
-                    guruCell(wb, row, 7, "",            fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 8, WAKTU_BARIS[b],fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 9, LBL_KHUSUS[b], fB, CYAN, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row,10, "",            fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                    sheet.addMergedRegion(new CellRangeAddress(rowIdx-1,rowIdx-1,9,10));
-                } else {
-                    guruCell(wb, row, 0, "",                              fN, WHITE, HorizontalAlignment.CENTER, false, true);
-                    guruCell(wb, row, 1, JAM_KE[b]!=null?JAM_KE[b]:"",  fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 2, WAKTU_BARIS[b],                 fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 3, "",                              fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 4, "",                              fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 6, "",                              fN, WHITE, HorizontalAlignment.CENTER, false, true);
-                    guruCell(wb, row, 7, JAM_KE[b]!=null?JAM_KE[b]:"",  fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 8, WAKTU_BARIS[b],                 fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row, 9, "",                              fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                    guruCell(wb, row,10, "",                              fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                }
-            }
-
-            // Merge HARI vertikal + isi nama hari
-            sheet.addMergedRegion(new CellRangeAddress(dataStart, dataStart+barisPer-1, 0, 0));
-            sheet.addMergedRegion(new CellRangeAddress(dataStart, dataStart+barisPer-1, 6, 6));
-            sheet.getRow(dataStart).getCell(0).setCellValue(NAMA_HARI[hKiri]);
-            sheet.getRow(dataStart).getCell(0).setCellStyle(guruStyle(wb, fB, LGRAY, HorizontalAlignment.CENTER, true, true));
-            if (hKanan >= 0) {
-                sheet.getRow(dataStart).getCell(6).setCellValue(NAMA_HARI[hKanan]);
-                sheet.getRow(dataStart).getCell(6).setCellStyle(guruStyle(wb, fB, LGRAY, HorizontalAlignment.CENTER, true, true));
-            }
-
-            // Spasi antar panel
-            sheet.createRow(rowIdx++).setHeightInPoints(6);
-        }
-
-        // DataKelas sheet tersembunyi
-        int exD = wb.getSheetIndex("DataKelas");
-        if (exD >= 0) wb.removeSheetAt(exD);
-        XSSFSheet dks = wb.createSheet("DataKelas");
-        wb.setSheetHidden(wb.getSheetIndex("DataKelas"), true);
-
-        Row dHdr = dks.createRow(0);
-        dHdr.createCell(0).setCellValue("NamaKelas");
-        dHdr.createCell(1).setCellValue("WaliKelas");
-        int co = 2;
-        for (int h = 0; h < hariRange.length; h++)
-            for (int b = 0; b < barisPer; b++)
-                dHdr.createCell(co++).setCellValue("H"+h+"B"+b);
+        String[] allKelas = buatDaftarKelas();
 
         // Map guruNum -> namaGuru dan guruNum+kelasIdx -> mapel
         Map<String, String> guruNama = new HashMap<>();
@@ -1722,89 +1439,111 @@ public class Main {
             } catch (Exception ignored) {}
         }
 
-        // Isi data per kelas
-        String[] allKelas = buatDaftarKelas();
-        for (int kIdx = 0; kIdx < totalKelas; kIdx++) {
-            Row dr = dks.createRow(kIdx+1);
-            dr.createCell(0).setCellValue(kelasList.get(kIdx));
-            dr.createCell(1).setCellValue("");
+        // Hapus sheet lama jika ada
+        int ex = wb.getSheetIndex("Jadwal Kelas");
+        if (ex >= 0) wb.removeSheetAt(ex);
+        ex = wb.getSheetIndex("DataKelas");
+        if (ex >= 0) wb.removeSheetAt(ex);
+        ex = wb.getSheetIndex("VBAKelas");
+        if (ex >= 0) wb.removeSheetAt(ex);
 
-            int col2 = 2;
+        // Buat satu sheet untuk setiap kelas
+        for (int kIdx = 0; kIdx < allKelas.length; kIdx++) {
+            String namaKelas = allKelas[kIdx];
+
+            String sheetName = "Kelas " + namaKelas;
+            int si = wb.getSheetIndex(sheetName);
+            if (si >= 0) wb.removeSheetAt(si);
+            XSSFSheet sheet = wb.createSheet(sheetName);
+            sheet.setDefaultRowHeightInPoints(14);
+
+            XSSFFont fN = guruFont(wb, 10, false);
+            XSSFFont fB = guruFont(wb, 10, true);
+
+            int[] cw = {8,5,16,25,25};
+            for (int i = 0; i < cw.length; i++) sheet.setColumnWidth(i, cw[i]*256);
+
+            int rowIdx = 0;
+
+            // Info kelas
+            Row rK = sheet.createRow(rowIdx++); rK.setHeightInPoints(20);
+            guruCell(wb, rK, 0, "KELAS", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+            guruCell(wb, rK, 1, ":",      fB, WHITE, HorizontalAlignment.CENTER, false, false);
+            guruCell(wb, rK, 2, namaKelas, fB, WHITE, HorizontalAlignment.LEFT, false, false);
+
+            rowIdx++; // spasi
+
+            // Header tabel
+            Row rH = sheet.createRow(rowIdx++); rH.setHeightInPoints(16);
+            guruCell(wb, rH, 0, "HARI",      fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 1, "JAM",       fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 2, "WAKTU",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 3, "MAPEL",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 4, "NAMA GURU", fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+
+            // Tabel jadwal per hari
             for (int h = 0; h < hariRange.length; h++) {
-                int start = hariRange[h][0], end = hariRange[h][1];
-                int[] jb = new int[barisPer]; Arrays.fill(jb,-1);
-                int jIdx = start;
-                for (int b = 0; b < barisPer; b++)
-                    if (JAM_KE[b] != null && jIdx <= end) jb[b] = jIdx++;
+                int start    = hariRange[h][0];
+                int end      = hariRange[h][1];
+                int jamAktual = end - start + 1;
+
+                int startRow = rowIdx;
+                int jamKe = 0;
+                int bRow  = 0;
 
                 for (int b = 0; b < barisPer; b++) {
-                    String val = "";
-                    if (jb[b] >= 0 && jb[b] < jadwal.length && kIdx < jadwal[jb[b]].length) {
-                        String isi = jadwal[jb[b]][kIdx];
-                        if (isi != null && !isi.isEmpty()) {
-                            String guruNum = isi.replaceAll("[^0-9]","");
-                            String nama  = guruNama.getOrDefault(guruNum, "");
-                            String mapel = guruKelasMapel.getOrDefault(guruNum+"|"+kIdx, "");
-                            val = mapel+"|"+nama;
-                        }
-                    }
-                    dr.createCell(col2++).setCellValue(val);
-                }
-            }
-        }
-
-        // Isi kelas pertama langsung
-        if (totalKelas > 0) {
-            Row dr = dks.getRow(1);
-            sheet.getRow(2).getCell(2).setCellValue(dr.getCell(0).getStringCellValue());
-            sheet.getRow(3).getCell(2).setCellValue("-");
-            isiDataKelasKeSheet(sheet, dks, 1, dataRowStart, barisPer, panelH, LBL_KHUSUS, PANEL_HARI);
-        }
-
-        // VBAKelas config
-        int vki = wb.getSheetIndex("VBAKelas");
-        if (vki >= 0) wb.removeSheetAt(vki);
-        XSSFSheet vks = wb.createSheet("VBAKelas");
-        wb.setSheetHidden(wb.getSheetIndex("VBAKelas"), true);
-        vks.createRow(0).createCell(0).setCellValue("config");
-        vks.createRow(1).createCell(0).setCellValue(dataRowStart+1); // startRow 1-indexed
-        vks.createRow(2).createCell(0).setCellValue(barisPer);
-        vks.createRow(3).createCell(0).setCellValue(panelH);
-    }
-
-    private static void isiDataKelasKeSheet(XSSFSheet sheet, XSSFSheet dks, int dkRow,
-                                            int dataRowStart, int barisPer, int panelH,
-                                            String[] LBL_KHUSUS, int[][] PANEL_HARI) {
-        Row dr = dks.getRow(dkRow); if (dr == null) return;
-        for (int p = 0; p < 3; p++) {
-            int panelDataStart = dataRowStart + p*panelH + 2;
-            int hKiri  = PANEL_HARI[p][0];
-            int hKanan = PANEL_HARI[p][1];
-            for (int b = 0; b < barisPer; b++) {
-                if (LBL_KHUSUS[b] != null) continue;
-                Row row = sheet.getRow(panelDataStart+b); if (row == null) continue;
-                // Kiri
-                Cell dc = dr.getCell(2 + hKiri*barisPer + b);
-                String val = (dc != null) ? dc.getStringCellValue() : "";
-                if (!val.isEmpty()) {
-                    String[] pts = val.split("\\|",2);
-                    row.getCell(3).setCellValue(pts[0]);
-                    row.getCell(4).setCellValue(pts.length>1?pts[1]:"");
-                } else {
-                    row.getCell(3).setCellValue(""); row.getCell(4).setCellValue("");
-                }
-                // Kanan
-                if (hKanan >= 0) {
-                    dc = dr.getCell(2 + hKanan*barisPer + b);
-                    val = (dc != null) ? dc.getStringCellValue() : "";
-                    if (!val.isEmpty()) {
-                        String[] pts = val.split("\\|",2);
-                        row.getCell(9).setCellValue(pts[0]);
-                        row.getCell(10).setCellValue(pts.length>1?pts[1]:"");
+                    if (JAM_KE[b] != null) {
+                        if (jamKe >= jamAktual) break;
+                        jamKe++;
                     } else {
-                        row.getCell(9).setCellValue(""); row.getCell(10).setCellValue("");
+                        boolean adaJamBerikut = false;
+                        for (int nb = b+1; nb < barisPer; nb++) {
+                            if (JAM_KE[nb] != null && jamKe < jamAktual) { adaJamBerikut = true; break; }
+                        }
+                        if (!adaJamBerikut) break;
                     }
+
+                    Row row = sheet.createRow(rowIdx++);
+                    row.setHeightInPoints(14);
+
+                    if (LBL_KHUSUS[b] != null) {
+                        guruCell(wb, row, 0, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 1, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, WAKTU_BARIS[b],   fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 3, LBL_KHUSUS[b],    fB, CYAN, HorizontalAlignment.CENTER, true, true);
+                        sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 3, 4));
+                        guruCell(wb, row, 4, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                    } else {
+                        int slot = start + jamKe - 1;
+                        String guruId = "";
+                        String mapel = "";
+                        String guruName = "";
+                        if (slot < jadwal.length && kIdx < jadwal[slot].length) {
+                            String isi = jadwal[slot][kIdx];
+                            if (isi != null && !isi.isEmpty()) {
+                                guruId = isi.replaceAll("[^0-9]","");
+                                guruName = guruNama.getOrDefault(guruId, "");
+                                mapel = guruKelasMapel.getOrDefault(guruId+"|"+kIdx, "");
+                            }
+                        }
+                        guruCell(wb, row, 0, "",        fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 1, JAM_KE[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, WAKTU_BARIS[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 3, mapel,    fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 4, guruName, fN, WHITE, HorizontalAlignment.LEFT, true, true);
+                    }
+                    bRow++;
                 }
+
+                // Merge kolom HARI vertikal
+                if (startRow < rowIdx) {
+                    sheet.addMergedRegion(new CellRangeAddress(startRow, rowIdx-1, 0, 0));
+                    sheet.getRow(startRow).getCell(0).setCellValue(NAMA_HARI[h]);
+                    sheet.getRow(startRow).getCell(0).setCellStyle(guruStyle(wb, fB, LGRAY, HorizontalAlignment.CENTER, true, true));
+                }
+
+                // Spasi antar hari
+                sheet.createRow(rowIdx++).setHeightInPoints(6);
             }
         }
     }
@@ -2081,6 +1820,193 @@ public class Main {
         return penaltiTotal;
     }
 
+    static int hitungPenaltiMGMPSeninHard(String[][] jadwal,
+                                      int[][] hariRange,
+                                      Set<String> MGMPsenin) {
+
+        int penaltiTotal = 0;
+
+        int start = hariRange[0][0];
+
+        // hitung per guru berapa jam mengajar setelah jam 4 di hari Senin
+        Map<String, Integer> jamPerGuru = new HashMap<>();
+
+        for (int r = 0; r < jadwal.length; r++) {
+
+            int hari = getHari(r, hariRange);
+            if (hari != 0) continue; // hanya Senin
+
+            int jam = r - start + 1;
+            if (jam <= 4) continue; // lewati jam 1-4
+
+            for (int k = 0; k < jadwal[r].length; k++) {
+
+                String idAsli = jadwal[r][k];
+                if (idAsli == null || idAsli.equals("")) continue;
+
+                String idGuru = idAsli.replaceAll("[^0-9]", "");
+                if (!MGMPsenin.contains(idGuru)) continue;
+
+                jamPerGuru.put(idGuru, jamPerGuru.getOrDefault(idGuru, 0) + 1);
+            }
+        }
+
+        // penalti hanya kalau > 1 jam
+        for (int jam : jamPerGuru.values()) {
+            if (jam > 1) {
+                penaltiTotal += (jam - 1);
+            }
+        }
+
+        return penaltiTotal;
+    }
+
+    static int hitungPenaltiMGMPSelasaHard(String[][] jadwal,
+                                       int[][] hariRange,
+                                       Set<String> MGMPselasa) {
+
+        int penaltiTotal = 0;
+
+        int start = hariRange[1][0];
+
+        Map<String, Integer> jamPerGuru = new HashMap<>();
+
+        for (int r = 0; r < jadwal.length; r++) {
+
+            int hari = getHari(r, hariRange);
+            if (hari != 1) continue; // hanya Selasa
+
+            int jam = r - start + 1;
+            if (jam <= 4) continue;
+
+            for (int k = 0; k < jadwal[r].length; k++) {
+
+                String idAsli = jadwal[r][k];
+                if (idAsli == null || idAsli.equals("")) continue;
+
+                String idGuru = idAsli.replaceAll("[^0-9]", "");
+                if (!MGMPselasa.contains(idGuru)) continue;
+
+                jamPerGuru.put(idGuru, jamPerGuru.getOrDefault(idGuru, 0) + 1);
+            }
+        }
+
+        for (int jam : jamPerGuru.values()) {
+            if (jam > 1) {
+                penaltiTotal += (jam - 1);
+            }
+        }
+
+        return penaltiTotal;
+    }
+
+    static int hitungPenaltiMGMPRabuHard(String[][] jadwal,
+                                     int[][] hariRange,
+                                     Set<String> MGMPrabu) {
+
+        int penaltiTotal = 0;
+
+        int start = hariRange[2][0];
+
+        Map<String, Integer> jamPerGuru = new HashMap<>();
+
+        for (int r = 0; r < jadwal.length; r++) {
+
+            int hari = getHari(r, hariRange);
+            if (hari != 2) continue; // hanya Rabu
+
+            int jam = r - start + 1;
+            if (jam <= 4) continue;
+
+            for (int k = 0; k < jadwal[r].length; k++) {
+
+                String idAsli = jadwal[r][k];
+                if (idAsli == null || idAsli.equals("")) continue;
+
+                String idGuru = idAsli.replaceAll("[^0-9]", "");
+                if (!MGMPrabu.contains(idGuru)) continue;
+
+                jamPerGuru.put(idGuru, jamPerGuru.getOrDefault(idGuru, 0) + 1);
+            }
+        }
+
+        for (int jam : jamPerGuru.values()) {
+            if (jam > 1) {
+                penaltiTotal += (jam - 1);
+            }
+        }
+
+        return penaltiTotal;
+    }
+
+
+    static int hitungPenaltiMGMPKamisHard(String[][] jadwal,
+                                      int[][] hariRange,
+                                      Set<String> MGMPkamis) {
+
+        int penaltiTotal = 0;
+
+        int start = hariRange[3][0];
+
+        Map<String, Integer> jamPerGuru = new HashMap<>();
+
+        for (int r = 0; r < jadwal.length; r++) {
+
+            int hari = getHari(r, hariRange);
+            if (hari != 3) continue; // hanya Kamis
+
+            int jam = r - start + 1;
+            if (jam <= 4) continue; // lewati jam 1-4
+
+            for (int k = 0; k < jadwal[r].length; k++) {
+
+                String idAsli = jadwal[r][k];
+                if (idAsli == null || idAsli.equals("")) continue;
+
+                String idGuru = idAsli.replaceAll("[^0-9]", "");
+                if (!MGMPkamis.contains(idGuru)) continue;
+
+                jamPerGuru.put(idGuru, jamPerGuru.getOrDefault(idGuru, 0) + 1);
+            }
+        }
+
+        // penalti hanya kalau > 1 jam
+        for (int jam : jamPerGuru.values()) {
+            if (jam > 1) {
+                penaltiTotal += (jam - 1);
+            }
+        }
+
+        return penaltiTotal;
+    }
+
+    static int hitungTotalPenaltiMGMPHard(String[][] jadwal,
+                                      int[][] hariRange,
+                                      Set<String> MGMPsenin,
+                                      Set<String> MGMPselasa,
+                                      Set<String> MGMPrabu,
+                                      Set<String> MGMPkamis) {
+
+        int total = 0;
+
+        total += hitungPenaltiMGMPSeninHard(jadwal, hariRange, MGMPsenin);
+        total += hitungPenaltiMGMPSelasaHard(jadwal, hariRange, MGMPselasa);
+        total += hitungPenaltiMGMPRabuHard(jadwal, hariRange, MGMPrabu);
+        total += hitungPenaltiMGMPKamisHard(jadwal, hariRange, MGMPkamis)*100;
+
+//        System.out.println(
+//                "Penalti MGMP: " +
+//                        "Senin=" + hitungPenaltiMGMPSenin(jadwal, hariRange, MGMPsenin) + ", " +
+//                        "Selasa=" + hitungPenaltiMGMPSelasa(jadwal, hariRange, MGMPselasa) + ", " +
+//                        "Rabu=" + hitungPenaltiMGMPRabu(jadwal, hariRange, MGMPrabu) + ", " +
+//                        "Kamis=" + hitungPenaltiMGMPKamis(jadwal, hariRange, MGMPkamis)
+//        );
+
+        return total;
+    }
+
+
+
     static int hitungTotalPenaltiMGMP(String[][] jadwal,
                                       int[][] hariRange,
                                       Set<String> MGMPsenin,
@@ -2200,11 +2126,13 @@ public class Main {
 
     static int hitungPenaltiMaxJamPerHari(String[][] jadwal,
                                           int[][] hariRange,
-                                          int maxJam) {
-
+                                          int maxJam,
+                                          int maxHariPenuh) {
         int penalti = 0;
 
-        // loop per hari
+        // kumpulkan jam per guru per hari
+        HashMap<String, Integer> hariPenuhPerGuru = new HashMap<>(); // hitung hari yang = maxJam
+
         for (int h = 0; h < hariRange.length; h++) {
 
             int start = hariRange[h][0];
@@ -2214,28 +2142,37 @@ public class Main {
 
             // ambil semua jam dalam 1 hari
             for (int r = start; r <= end; r++) {
-
                 for (int k = 0; k < jadwal[r].length; k++) {
 
                     String idAsli = jadwal[r][k];
-
                     if (idAsli == null || idAsli.equals("")) continue;
 
-                    // ambil angka saja (biar konsisten)
                     String idGuru = idAsli.replaceAll("[^0-9]", "");
-
                     jumlahGuru.put(idGuru, jumlahGuru.getOrDefault(idGuru, 0) + 1);
                 }
             }
 
-            // cek penalti
+            // cek penalti per hari
             for (String id : jumlahGuru.keySet()) {
-
                 int jumlah = jumlahGuru.get(id);
 
+                // constraint 1: per hari maksimal 8 jam
                 if (jumlah > maxJam) {
                     penalti += (jumlah - maxJam);
                 }
+
+                // hitung berapa hari yang penuh (= maxJam)
+                if (jumlah >= maxJam) {
+                    hariPenuhPerGuru.put(id, hariPenuhPerGuru.getOrDefault(id, 0) + 1);
+                }
+            }
+        }
+
+        // constraint 2: maksimal 2 hari yang penuh 8 jam
+        for (String id : hariPenuhPerGuru.keySet()) {
+            int hariPenuh = hariPenuhPerGuru.get(id);
+            if (hariPenuh > maxHariPenuh) {
+                penalti += (hariPenuh - maxHariPenuh);
             }
         }
 
@@ -2349,21 +2286,13 @@ public class Main {
 
         int total = 0;
 
-        total += hitungBentrok(jadwal);
+        total += hitungBentrok(jadwal)*100;
         total += hitungPenaltiPJOK(jadwal, hariRange, guruPJOK);
         total += hitungPenaltiJam9dan10(jadwal, hariRange, 5);
-        total += hitungPenaltiMaxJamPerHari(jadwal, hariRange, 8);
+        total += hitungPenaltiMaxJamPerHari(jadwal, hariRange, 8, 2)*50;
         total += hitungPenaltiGuruID43(jadwal, hariRange);
         total += hitungPenaltiMaxGuruPerHari(jadwal, hariRange, 6);
 
-//        System.out.println(
-//                "Rincian penalti: " +
-//                        "Bentrok=" + hitungBentrok(jadwal) +
-//                        ", PJOK=" + hitungPenaltiPJOK(jadwal, hariRange, guruPJOK) +
-//                        ", Jam9&10=" + hitungPenaltiJam9dan10(jadwal, hariRange, 2) +
-//                        ", MaxJamPerHari=" + hitungPenaltiMaxJamPerHari(jadwal, hariRange, 8)+
-//                        ", GuruID43=" + hitungPenaltiGuruID43(jadwal, hariRange)
-//        );
 
         return total;
     }
@@ -2391,7 +2320,7 @@ public class Main {
     static void swap3Random(String[][] jadwal, int[][] hariRange) {
 
         Random rand = new Random();
-        int maxPercobaan = 1;
+        int maxPercobaan = 100;
         int percobaan = 0;
 
         while (percobaan < maxPercobaan) {
@@ -2491,8 +2420,6 @@ public class Main {
 
         Random rand = new Random();
         int iterasi = 0;
-
-
 
         while (iterasi < 1) {
 
@@ -2791,71 +2718,10 @@ public class Main {
         }
     }
 
-    static void rotationRandom(String[][] jadwal, int[][] hariRange) {
-
-        Random rand = new Random();
-
-        while (true) {
-
-            int kelas = rand.nextInt(jadwal[0].length);
-            int hari = rand.nextInt(hariRange.length);
-
-            int start = hariRange[hari][0];
-            int end = hariRange[hari][1];
-
-            // cari blok 2 jam
-            List<Integer> blokStart = new ArrayList<>();
-
-            for (int i = start; i < end; i++) {
-
-                if (jadwal[i][kelas].equals("")) continue;
-
-                // cek blok 2 jam
-                if (i + 1 <= end &&
-                        jadwal[i][kelas].equals(jadwal[i + 1][kelas])) {
-
-                    // skip kalau blok 3 (PJOK)
-                    if (i + 2 <= end &&
-                            jadwal[i][kelas].equals(jadwal[i + 2][kelas])) {
-                        continue;
-                    }
-
-                    blokStart.add(i);
-                    i++; // skip pasangan
-                }
-            }
-
-            // minimal harus ada 2 blok
-            if (blokStart.size() < 2) continue;
-
-            // ===== simpan blok pertama =====
-            int first = blokStart.get(0);
-            String guruFirst = jadwal[first][kelas];
-
-            // ===== rotation =====
-            for (int i = 0; i < blokStart.size() - 1; i++) {
-                int curr = blokStart.get(i);
-                int next = blokStart.get(i + 1);
-
-                jadwal[curr][kelas] = jadwal[next][kelas];
-                jadwal[curr + 1][kelas] = jadwal[next + 1][kelas];
-            }
-
-            // ===== taruh ke akhir =====
-            int last = blokStart.get(blokStart.size() - 1);
-
-            jadwal[last][kelas] = guruFirst;
-            jadwal[last + 1][kelas] = guruFirst;
-
-            return; //
-        }
-    }
-
     static void swap2WithSingle(String[][] jadwal, int[][] hariRange) {
 
         Random rand = new Random();
-        int iterasi = 0;
-        int maxPercobaan = 1;
+        int maxPercobaan = 100;
         int percobaan = 0;
 
         while (percobaan < maxPercobaan) {
@@ -2994,7 +2860,7 @@ public class Main {
             jadwal[s1][kelas] = guruBlock;
             jadwal[s2][kelas] = guruBlock;
 
-            iterasi++;
+            return;
         }
 
 //        if (percobaan >= maxPercobaan) {
@@ -3005,8 +2871,8 @@ public class Main {
     static void swap3WithDoubleAndSingle(String[][] jadwal, int[][] hariRange) {
 
         Random rand = new Random();
-        int iterasi = 0;
-        int maxPercobaan = 1;
+
+        int maxPercobaan = 100;
         int percobaan = 0;
 
         while (percobaan < maxPercobaan) {
@@ -3198,9 +3064,45 @@ public class Main {
             jadwal[startPasangan + 1][kelas] = guruBlock3;
             jadwal[startPasangan + 2][kelas] = guruBlock3;
 
+            return;
+        }
+    }
+
+    static void swapRotasiDouble(String[][] jadwal, int[][] hariRange) {
+
+        Random rand = new Random();
+        int iterasi = 0;
+
+        while (iterasi < 1) {
+
+            int kelas = rand.nextInt(jadwal[0].length);
+
+            // ===== pilih hari random =====
+            int hari = rand.nextInt(hariRange.length);
+            int startHari = hariRange[hari][0];
+            int endHari = hariRange[hari][1];
+            int jumlahJam = endHari - startHari + 1;
+
+            // harus genap
+            if (jumlahJam % 2 != 0) continue;
+
+            // ===== ambil 2 slot paling atas =====
+            String slot1 = jadwal[startHari][kelas];
+            String slot2 = jadwal[startHari + 1][kelas];
+
+            // ===== geser semua slot ke atas 2 posisi =====
+            for (int r = startHari; r <= endHari - 2; r++) {
+                jadwal[r][kelas] = jadwal[r + 2][kelas];
+            }
+
+            // ===== taruh 2 slot tadi ke paling bawah =====
+            jadwal[endHari - 1][kelas] = slot1;
+            jadwal[endHari][kelas] = slot2;
+
             iterasi++;
         }
     }
+
     private static void swapHariSatuKelas(String[][] jadwal, int[][] hariRange) {
         Random rand = new Random();
 
@@ -3243,39 +3145,35 @@ public class Main {
 
     static int[] iterasiGlobal = {0};
 
-
-    static String[][] hillClimbingTabuHardConstrain(
+    static String[][] hillClimbingTabuGuru43(
             String[][] jadwal,
             int[][] hariRange,
             Set<String> guruPJOK) {
 
         Random rand = new Random();
         Queue<Integer> tabuList = new LinkedList<>();
-        int tabuSize = 3;
+        int tabuSize = 2;
 
         String[][] current = copyJadwal(jadwal);
 
-        int penaltiSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
+        int penaltiSekarang = hitungPenaltiGuruID43(current, hariRange);
         int penaltiPJOKSekarang = hitungPenaltiPJOK(current, hariRange, guruPJOK);
-        int penaltiGuru43Sekarang = hitungPenaltiGuruID43(current, hariRange);
-        int penaltiMaxGuruPerHariSekarang = hitungPenaltiMaxGuruPerHari(current, hariRange, 6);
 
         int iterasi = 0;
 
-        System.out.println("Penalti awal: " + penaltiSekarang);
+        //System.out.println("Penalti awal: " + penaltiSekarang);
 
         while (iterasi < 1000000) {
             if (SchedulerUI.stopRequested) break;
             iterasi++;
             iterasiGlobal[0]++;
 
-            if (iterasiGlobal[0] % 20000 == 0) {
-                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Penalti: " + penaltiSekarang);
-            }
+//            if (iterasiGlobal[0] % 20000 == 0) {
+//                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Penalti: " + penaltiSekarang );
+//            }
 
             if (penaltiSekarang <= 0) {
-//                System.out.println("Target tercapai");
-                System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
+                System.out.println("Pelanggaran Guru ID43 Optimal");
                 break;
             }
 
@@ -3285,21 +3183,17 @@ public class Main {
             int move;
 
             do {
-                move = rand.nextInt(6);
+                move = rand.nextInt(4);
             } while (tabuList.contains(move));
 
             if (move == 0) {
                 swap1Random(neighbor, hariRange);
             } else if (move == 1) {
-                swap2Random(neighbor, hariRange);
-            } else if (move == 2) {
                 swap2WithSingle(neighbor, hariRange);
-            } else if (move == 3) {
+            } else if (move == 2) {
                 swap3WithDoubleAndSingle(neighbor, hariRange);
-            }else if (move == 4){
-                swap2PJOK(neighbor, hariRange, guruPJOK);
-            } else {
-                swap3Random(neighbor, hariRange);
+            }else{
+                swapHariSatuKelas(neighbor, hariRange);
             }
 
             tabuList.offer(move);
@@ -3307,11 +3201,9 @@ public class Main {
                 tabuList.poll();
             }
 
-            int penaltiBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
-
+            int penaltiBaru = hitungPenaltiGuruID43(neighbor, hariRange);
             int penaltiPJOKBaru = hitungPenaltiPJOK(neighbor, hariRange, guruPJOK);
-            int penaltiGuru43Baru = hitungPenaltiGuruID43(neighbor, hariRange);
-            int penaltiMaxGuruPerHariBaru = hitungPenaltiMaxGuruPerHari(neighbor, hariRange, 6);
+
 
 //            System.out.println(
 //                    "Total: " + penaltiSekarang + " -> " + penaltiBaru +
@@ -3319,9 +3211,7 @@ public class Main {
 //            );
 
             if (penaltiBaru <= penaltiSekarang
-                    && penaltiPJOKSekarang >= penaltiPJOKBaru
-                    && penaltiGuru43Sekarang >= penaltiGuru43Baru
-                    && penaltiMaxGuruPerHariSekarang >= penaltiMaxGuruPerHariBaru){
+                    && penaltiPJOKSekarang >= penaltiPJOKBaru){
 
                 for (int i = 0; i < current.length; i++) {
                     for (int j = 0; j < current[i].length; j++) {
@@ -3330,8 +3220,6 @@ public class Main {
                 }
                 penaltiSekarang = penaltiBaru;
                 penaltiPJOKSekarang = penaltiPJOKBaru;
-                penaltiGuru43Sekarang = penaltiGuru43Baru;
-                penaltiMaxGuruPerHariSekarang = penaltiMaxGuruPerHariBaru;
 
 //                System.out.println("Diterima");
 
@@ -3344,24 +3232,333 @@ public class Main {
 //                System.out.println("Ditolak");
             }
         }
-        System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
-
+        System.out.println("Optimasi Pelanggaran Guru ID 43 Berhenti di iterasi global: " + iterasiGlobal[0] + " | Pelanggaran akhir: " + penaltiSekarang);
         return current;
     }
 
-    static String[][] hillClimbingRandomMGMPKamis(
+    static String[][] hillClimbingTabuHardConstrain(
+            String[][] jadwal,
+            int[][] hariRange,
+            Set<String> guruPJOK) {
+
+        Random rand = new Random();
+        Queue<Integer> tabuList = new LinkedList<>();
+        int tabuSize = 2;
+
+        String[][] current = copyJadwal(jadwal);
+
+        int penaltiSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
+        int penaltiPJOKSekarang = hitungPenaltiPJOK(current, hariRange, guruPJOK);
+        int penaltiGuru43Sekarang = hitungPenaltiGuruID43(current, hariRange);
+
+        int iterasi = 0;
+
+        System.out.println("Pelanggaran Hard Constraint awal: " + penaltiSekarang);
+
+        while (iterasi < 1000000) {
+            if (SchedulerUI.stopRequested) break;
+            iterasi++;
+            iterasiGlobal[0]++;
+
+            if (iterasiGlobal[0] % 20000 == 0) {
+                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Pelanggaran: " + penaltiSekarang );
+            }
+
+            if (penaltiSekarang <= 0) {
+                System.out.println("Hard Constrain Optimal");
+                break;
+            }
+
+            String[][] neighbor = copyJadwal(current);
+
+            //tabu
+            int move;
+            do {
+                move = rand.nextInt(4);
+            } while (tabuList.contains(move));
+
+            if (move == 0) {
+                swap1Random(neighbor, hariRange);
+            } else if (move == 1) {
+                swap2Random(neighbor, hariRange);
+            } else if (move == 2) {
+                swap2WithSingle(neighbor, hariRange);
+            } else {
+                swapRotasiDouble(neighbor, hariRange);
+            }
+
+            tabuList.offer(move);
+            if (tabuList.size() > tabuSize) {
+                tabuList.poll();
+            }
+
+            int penaltiBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
+            int penaltiPJOKBaru = hitungPenaltiPJOK(neighbor, hariRange, guruPJOK);
+            int penaltiGuru43Baru = hitungPenaltiGuruID43(neighbor, hariRange);
+
+
+//            System.out.println(
+//                    "Total: " + penaltiSekarang + " -> " + penaltiBaru +
+//                            " | PJOK: " + penaltiPJOKSekarang + " -> " + penaltiPJOKBaru
+//            );
+
+            if (penaltiBaru <= penaltiSekarang
+                    && penaltiPJOKSekarang >= penaltiPJOKBaru
+                    && penaltiGuru43Sekarang >= penaltiGuru43Baru){
+
+                for (int i = 0; i < current.length; i++) {
+                    for (int j = 0; j < current[i].length; j++) {
+                        current[i][j] = neighbor[i][j];
+                    }
+                }
+                penaltiSekarang = penaltiBaru;
+                penaltiPJOKSekarang = penaltiPJOKBaru;
+                penaltiGuru43Sekarang = penaltiGuru43Baru;
+
+//                System.out.println("Diterima");
+
+            } else {
+                for (int i = 0; i < neighbor.length; i++) {
+                    for (int j = 0; j < neighbor[i].length; j++) {
+                        neighbor[i][j] = current[i][j];
+                    }
+                }
+//                System.out.println("Ditolak");
+            }
+        }
+        System.out.println("Optimasi hard constrain berhenti di iterasi global: " + iterasiGlobal[0] + " | Pelanggaran akhir: " + penaltiSekarang);
+        return current;
+    }
+
+    static String[][] hillClimbingTabuSoftConstrain(
             String[][] jadwal,
             int[][] hariRange,
             Set<String> guruPJOK,
-            Set<String> MGMPkamis) {
+            Set<String> MGMPsenin,
+            Set<String> MGMPselasa,
+            Set<String> MGMPrabu,
+            Set<String> MGMPkamis,
+            Set<String> guruMatematika) {
 
         Random rand = new Random();
 
         String[][] current = copyJadwal(jadwal);
 
-        int penaltiSekarang = hitungPenaltiMGMPKamis(jadwal, hariRange, MGMPkamis);
-        int penaltiPJOKSekarang = hitungPenaltiPJOK(current, hariRange, guruPJOK);
+        Queue<Integer> tabuList = new LinkedList<>();
+        int tabuSize = 2;
 
+        int penaltiSekarang = hitungTotalSemuaPenaltiSoftConstrain(current, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
+        int penaltiHardConstrainSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
+
+        int iterasi = 0;
+
+        System.out.println("Penalti awal: " + penaltiSekarang);
+
+        while (iterasi < 1000000) {
+            iterasi++;
+
+            if (SchedulerUI.stopRequested) {
+                System.out.println("» Stop diminta, keluar dari iterasi.");
+                break;
+            }
+            iterasiGlobal[0]++;
+
+            if (iterasiGlobal[0] % 20000 == 0) {
+                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Penalti: " + penaltiSekarang);
+            }
+
+            if (penaltiSekarang <= 0) {
+                System.out.println("Target tercapai");
+                break;
+            }
+
+            String[][] neighbor = copyJadwal(current);
+
+            //random
+
+
+            //tabu
+
+            int move;
+            do {
+                move = rand.nextInt(4);
+            } while (tabuList.contains(move));
+
+            if (move == 0) {
+                swap1Random(neighbor, hariRange);
+            } else if (move == 1) {
+                swap2Random(neighbor, hariRange);
+            } else if (move == 2) {
+                swap2WithSingle(neighbor, hariRange);
+            } else {
+                swapRotasiDouble(neighbor, hariRange);
+            }
+
+            tabuList.offer(move);
+            if (tabuList.size() > tabuSize) {
+                tabuList.poll();
+            }
+
+            int penaltiBaru = hitungTotalSemuaPenaltiSoftConstrain(neighbor, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
+            int penaltiHardConstrainBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
+
+//            System.out.println(
+//                    "Total: " + penaltiSekarang + " -> " + penaltiBaru +
+//                            " | PJOK: " + penaltiPJOKSekarang + " -> " + penaltiPJOKBaru
+//            );
+
+            if (penaltiBaru <= penaltiSekarang
+                    && penaltiHardConstrainBaru <= penaltiHardConstrainSekarang){
+
+                for (int i = 0; i < current.length; i++) {
+                    for (int j = 0; j < current[i].length; j++) {
+                        current[i][j] = neighbor[i][j];
+                    }
+                }
+                penaltiSekarang = penaltiBaru;
+                penaltiHardConstrainSekarang = penaltiHardConstrainBaru;
+
+//                System.out.println("Diterima");
+
+            } else {
+                for (int i = 0; i < neighbor.length; i++) {
+                    for (int j = 0; j < neighbor[i].length; j++) {
+                        neighbor[i][j] = current[i][j];
+                    }
+                }
+//                System.out.println("Ditolak");
+            }
+        }
+
+        System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
+        return current;
+    }
+
+    static String[][] LAHCTabuSoftConstrain(
+            String[][] jadwal,
+            int[][] hariRange,
+            Set<String> guruPJOK,
+            Set<String> MGMPsenin,
+            Set<String> MGMPselasa,
+            Set<String> MGMPrabu,
+            Set<String> MGMPkamis,
+            Set<String> guruMatematika) {
+
+        Random rand = new Random();
+
+        String[][] current = copyJadwal(jadwal);
+        String[][] best = copyJadwal(jadwal);
+
+        Queue<Integer> tabuList = new LinkedList<>();
+        int tabuSize = 2;
+
+        // ── LAHC: tambah costList dan pointer v ─────────────────────
+        int L = 100;
+        int[] costList = new int[L];
+        int v = 0;
+        // ────────────────────────────────────────────────────────────
+
+        int penaltiSekarang = hitungTotalSemuaPenaltiSoftConstrain(current, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
+        int penaltiHardConstrainSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
+        int penaltiBest = penaltiSekarang;
+
+
+        // ── LAHC: isi costList dengan penalti awal ──────────────────
+        Arrays.fill(costList, penaltiSekarang);
+        // ────────────────────────────────────────────────────────────
+
+        int iterasi = 0;
+
+        System.out.println("Penalti soft constrain awal: " + penaltiSekarang);
+
+        while (iterasi < 1000000) {
+            iterasi++;
+
+            if (SchedulerUI.stopRequested) {
+                System.out.println("» Stop diminta, keluar dari iterasi.");
+                break;
+            }
+            iterasiGlobal[0]++;
+
+            if (iterasiGlobal[0] % 20000 == 0) {
+                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Pelanggaran: " + penaltiBest);
+            }
+
+            if (penaltiSekarang <= 0) {
+                System.out.println("Soft Constrain Optimal!");
+                break;
+            }
+
+            String[][] neighbor = copyJadwal(current);
+
+            int move;
+            do {
+                move = rand.nextInt(4);
+            } while (tabuList.contains(move));
+
+            if (move == 0) {
+                swap1Random(neighbor, hariRange);
+            } else if (move == 1) {
+                swap2Random(neighbor, hariRange);
+            } else if (move == 2) {
+                swap2WithSingle(neighbor, hariRange);
+            } else {
+                swapRotasiDouble(neighbor, hariRange);
+            }
+            tabuList.offer(move);
+            if (tabuList.size() > tabuSize) {
+                tabuList.poll();
+            }
+
+            int penaltiBaru = hitungTotalSemuaPenaltiSoftConstrain(neighbor, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
+            int penaltiHardConstrainBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
+
+            // ── Hanya baris ini yang berubah: <= costList[v] ─────────
+            if ((penaltiBaru <= penaltiSekarang || penaltiBaru <= costList[v])
+                    && penaltiHardConstrainBaru <= penaltiHardConstrainSekarang) {
+
+                for (int i = 0; i < current.length; i++) {
+                    for (int j = 0; j < current[i].length; j++) {
+                        current[i][j] = neighbor[i][j];
+                    }
+                }
+                penaltiSekarang = penaltiBaru;
+                penaltiHardConstrainSekarang = penaltiHardConstrainBaru;
+
+                if (penaltiSekarang <= penaltiBest) {
+                    best = copyJadwal(current);
+                    penaltiBest = penaltiSekarang;
+                }
+
+            } else {
+                for (int i = 0; i < neighbor.length; i++) {
+                    for (int j = 0; j < neighbor[i].length; j++) {
+                        neighbor[i][j] = current[i][j];
+                    }
+                }
+            }
+
+            // ── LAHC: update history dan geser pointer ───────────────
+            costList[v] = penaltiSekarang;
+            v = (v + 1) % L;
+            // ────────────────────────────────────────────────────────
+        }
+        System.out.println("Optimasi soft constrain berhenti di iterasi global: " + iterasiGlobal[0] + " | Pelanggaran akhir: " + penaltiSekarang);
+        return best;
+    }
+
+
+    static String[][] hillClimbingRandomHardConstrain(
+            String[][] jadwal,
+            int[][] hariRange,
+            Set<String> guruPJOK) {
+
+        Random rand = new Random();
+
+        String[][] current = copyJadwal(jadwal);
+
+        int penaltiSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
+        int penaltiPJOKSekarang = hitungPenaltiPJOK(current, hariRange, guruPJOK);
 
         int iterasi = 0;
 
@@ -3377,15 +3574,15 @@ public class Main {
             }
 
             if (penaltiSekarang <= 0) {
-//                System.out.println("Target tercapai");
-                System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
+               System.out.println("Hard Constrain Optimal");
+
                 break;
             }
 
             String[][] neighbor = copyJadwal(current);
 
             // random
-            int move = rand.nextInt(7);
+            int move = rand.nextInt(8);
             if (move == 0) {
                 swap1Random(neighbor, hariRange);
             } else if (move == 1) {
@@ -3396,14 +3593,16 @@ public class Main {
                 swap3WithDoubleAndSingle(neighbor, hariRange);
             }else if (move == 4){
                 swap2PJOK(neighbor, hariRange, guruPJOK);
-            }else if (move == 5){
+            }else if (move == 5) {
                 swapHariSatuKelas(neighbor, hariRange);
+            }else if (move == 6){
+                    swapRotasiDouble(neighbor, hariRange);
             } else {
                 swap3Random(neighbor, hariRange);
             }
 
 
-            int penaltiBaru = hitungPenaltiMGMPKamis(neighbor, hariRange, MGMPkamis);
+            int penaltiBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
             int penaltiPJOKBaru = hitungPenaltiPJOK(neighbor, hariRange, guruPJOK);
 
 //            System.out.println(
@@ -3437,98 +3636,6 @@ public class Main {
         return current;
     }
 
-    static String[][] hillClimbingRandomHardConstrain(
-            String[][] jadwal,
-            int[][] hariRange,
-            Set<String> guruPJOK,
-            Set<String> MGMPkamis) {
-
-        Random rand = new Random();
-
-        String[][] current = copyJadwal(jadwal);
-
-        int penaltiSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
-        int penaltiPJOKSekarang = hitungPenaltiPJOK(current, hariRange, guruPJOK);
-        int penaltiMGMPKamisSekarang = hitungPenaltiMGMPKamis(jadwal, hariRange, MGMPkamis);
-
-
-        int iterasi = 0;
-
-        System.out.println("Penalti awal: " + penaltiSekarang);
-
-        while (iterasi < 1000000) {
-            if (SchedulerUI.stopRequested) break;
-            iterasi++;
-            iterasiGlobal[0]++;
-
-            if (iterasiGlobal[0] % 20000 == 0) {
-                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Penalti: " + penaltiSekarang);
-            }
-
-            if (penaltiSekarang <= 0) {
-//                System.out.println("Target tercapai");
-                System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
-                break;
-            }
-
-            String[][] neighbor = copyJadwal(current);
-
-            // random
-            int move = rand.nextInt(7);
-            if (move == 0) {
-                swap1Random(neighbor, hariRange);
-            } else if (move == 1) {
-                swap2Random(neighbor, hariRange);
-            } else if (move == 2) {
-                swap2WithSingle(neighbor, hariRange);
-            } else if (move == 3) {
-                swap3WithDoubleAndSingle(neighbor, hariRange);
-            }else if (move == 4){
-                swap2PJOK(neighbor, hariRange, guruPJOK);
-            }else if (move == 5){
-                swapHariSatuKelas(neighbor, hariRange);
-            } else {
-                swap3Random(neighbor, hariRange);
-            }
-
-
-            int penaltiBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
-            int penaltiPJOKBaru = hitungPenaltiPJOK(neighbor, hariRange, guruPJOK);
-            int penaltiMGMPKamisBaru = hitungPenaltiMGMPKamis(neighbor, hariRange, MGMPkamis);
-
-//            System.out.println(
-//                    "Total: " + penaltiSekarang + " -> " + penaltiBaru +
-//                            " | PJOK: " + penaltiPJOKSekarang + " -> " + penaltiPJOKBaru
-//            );
-
-            if (penaltiBaru <= penaltiSekarang
-                    && penaltiPJOKSekarang >= penaltiPJOKBaru
-                    && penaltiMGMPKamisSekarang >= penaltiMGMPKamisBaru){
-
-                for (int i = 0; i < current.length; i++) {
-                    for (int j = 0; j < current[i].length; j++) {
-                        current[i][j] = neighbor[i][j];
-                    }
-                }
-                penaltiSekarang = penaltiBaru;
-                penaltiPJOKSekarang = penaltiPJOKBaru;
-                penaltiMGMPKamisSekarang = penaltiMGMPKamisBaru;
-//                System.out.println("Diterima");
-
-            } else {
-                for (int i = 0; i < neighbor.length; i++) {
-                    for (int j = 0; j < neighbor[i].length; j++) {
-                        neighbor[i][j] = current[i][j];
-                    }
-                }
-//                System.out.println("Ditolak");
-            }
-        }
-        System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
-
-        return current;
-    }
-
     static String[][] hillClimbingRandomSoftConstrain(
             String[][] jadwal,
             int[][] hariRange,
@@ -3542,9 +3649,6 @@ public class Main {
         Random rand = new Random();
 
         String[][] current = copyJadwal(jadwal);
-
-//        Queue<Integer> tabuList = new LinkedList<>();
-//        int tabuSize = 2;
 
         int penaltiSekarang = hitungTotalSemuaPenaltiSoftConstrain(current, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
         int penaltiHardConstrainSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
@@ -3591,28 +3695,6 @@ public class Main {
                 swap3Random(neighbor, hariRange);
             }
 
-            //tabu
-
-//            int move;
-//            do {
-//                move = rand.nextInt(5);
-//            } while (tabuList.contains(move));
-//
-//            if (move == 0) {
-//                swap1Random(neighbor, hariRange);
-//            } else if (move == 1) {
-//                swap2Random(neighbor, hariRange);
-//            } else if (move == 2) {
-//                swap2WithSingle(neighbor, hariRange);
-//            }else if (move == 3) {
-//                 swap2RandomPJOK(neighbor, hariRange, guruPJOK);
-//            } else {
-//                rotationRandom(neighbor, hariRange);
-//            }
-//            tabuList.offer(move);
-//            if (tabuList.size() > tabuSize) {
-//                tabuList.poll();
-//            }
 
             int penaltiBaru = hitungTotalSemuaPenaltiSoftConstrain(neighbor, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
             int penaltiHardConstrainBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
@@ -3649,103 +3731,5 @@ public class Main {
         return current;
     }
 
-    static String[][] LAHCRandom(
-            String[][] jadwal,
-            int[][] hariRange,
-            Set<String> guruPJOK,
-            Set<String> MGMPsenin,
-            Set<String> MGMPselasa,
-            Set<String> MGMPrabu,
-            Set<String> MGMPkamis,
-            Set<String> guruMatematika) {
-
-
-        String[][] current = copyJadwal(jadwal);
-        Random rand = new Random();
-
-
-        int penaltiAwal = hitungTotalSemuaPenalti(
-                current, hariRange,
-                guruPJOK,
-                MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis,
-                guruMatematika
-        );
-
-
-        int l = 100;
-        int[] fitnessHistory = new int[l];
-
-        // Mengisi slot isi
-        for (int i = 0; i < l; i++) {
-            fitnessHistory[i] = penaltiAwal;
-        }
-
-        int iter = 0;
-
-        System.out.println("Penalti awal: " + penaltiAwal);
-
-        while (penaltiAwal > 0) {
-            String[][] neighbor = copyJadwal(current);
-
-            int move;
-
-           //LLH
-
-
-
-            int kandidatSolusi = hitungTotalSemuaPenalti(
-                    neighbor, hariRange,
-                    guruPJOK,
-                    MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis,
-                    guruMatematika
-            );
-
-
-
-
-            System.out.println(
-                    "Iter " + iter +
-                            " | Current: " + penaltiAwal +
-                            " | New: " + kandidatSolusi +
-                            " | History[" + iter% fitnessHistory.length + "]: " + fitnessHistory[iter % fitnessHistory.length]
-            );
-            if (kandidatSolusi <= fitnessHistory[iter % fitnessHistory.length] || kandidatSolusi <= penaltiAwal) {
-                for (int i = 0; i < current.length; i++) {
-                    for (int j = 0; j < current[i].length; j++) {
-                        current[i][j] = neighbor[i][j];
-                    }
-                }
-                penaltiAwal = kandidatSolusi;
-                fitnessHistory[iter % fitnessHistory.length] = kandidatSolusi;
-//                System.out.println("Diterima");
-            } else {
-                for (int i = 0; i < neighbor.length; i++) {
-                    for (int j = 0; j < neighbor[i].length; j++) {
-                        neighbor[i][j] = current[i][j];
-                    }
-                }
-                System.out.println("Ditolak");
-            }
-
-
-            iter++;
-
-
-            if (penaltiAwal <= 0) {
-                System.out.println("Solusi optimal");
-                break;
-            }
-
-
-        }
-        System.out.println("Selesai di iterasi: " + iter);
-        System.out.println("Penalti akhir: " + penaltiAwal);
-
-
-        return current;
-    }
 
 }
-
-
-
