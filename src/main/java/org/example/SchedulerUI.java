@@ -9,6 +9,13 @@ import java.awt.event.*;
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableModel;
+import java.awt.print.PrinterJob;
+import java.awt.print.Printable;
+import java.awt.print.PageFormat;
 
 public class SchedulerUI extends JFrame {
 
@@ -26,6 +33,11 @@ public class SchedulerUI extends JFrame {
     public static int     jamJumat       = 8;
 
     public static volatile boolean stopRequested = false;
+
+    // Data dari Main setelah generate selesai
+    public static String[][]   scheduleJadwal;
+    public static int[][]      scheduleHariRange;
+    public static List<String[]> scheduleKebutuhan;
 
     private static SchedulerUI   instance;
     private static SchedulerTask schedulerTask;
@@ -73,6 +85,7 @@ public class SchedulerUI extends JFrame {
     private JTextPane    taLog;
     private JLabel       lblStatus;
     private JProgressBar progressBar;
+    private JPanel       pnlResult;
 
     private java.util.List<JComponent> inputComponents = new java.util.ArrayList<>();
 
@@ -148,6 +161,12 @@ public class SchedulerUI extends JFrame {
         center.add(box(10));
         center.add(buildActionCard());
         center.add(box(10));
+
+        pnlResult = buildResultCard();
+        pnlResult.setVisible(false);
+        center.add(pnlResult);
+        center.add(box(10));
+
         center.add(buildLogCard());
 
         JScrollPane scroll = new JScrollPane(center);
@@ -381,7 +400,7 @@ public class SchedulerUI extends JFrame {
             JButton minus = spinBtn("-");
             JButton plus  = spinBtn("+");
             minus.addActionListener(e -> { hariVals[idx] = Math.max(1, hariVals[idx]-1); hariValLabel[idx].setText(String.valueOf(hariVals[idx])); });
-            plus .addActionListener(e -> { hariVals[idx] = Math.min(20, hariVals[idx]+1); hariValLabel[idx].setText(String.valueOf(hariVals[idx])); });
+            plus .addActionListener(e -> { hariVals[idx] = Math.min(10, hariVals[idx]+1); hariValLabel[idx].setText(String.valueOf(hariVals[idx])); });
             inputComponents.add(minus); inputComponents.add(plus);
             hariGrid.add(buildSpinnerCard(hariNames[i], C_SUBTEXT, minus, hariValLabel[i], plus));
         }
@@ -500,6 +519,54 @@ public class SchedulerUI extends JFrame {
         wrapper.setBackground(C_WHITE);
         wrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
         wrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        wrapper.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(C_BORDER, 1, true),
+                BorderFactory.createEmptyBorder(14, 20, 14, 20)));
+        wrapper.add(outer, BorderLayout.CENTER);
+        return wrapper;
+    }
+
+    // -- Result card (hidden initially, shown after generate) -----------------
+    private JPanel buildResultCard() {
+        JPanel outer = new JPanel();
+        outer.setLayout(new BoxLayout(outer, BoxLayout.Y_AXIS));
+        outer.setOpaque(false);
+        outer.add(sectionLabel("Hasil Export"));
+
+        // Tab-like container
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        tabs.setBackground(C_WHITE);
+
+        // ── Per Guru tab ──
+        JPanel guruPanel = new JPanel();
+        guruPanel.setLayout(new BoxLayout(guruPanel, BoxLayout.Y_AXIS));
+        guruPanel.setBackground(C_WHITE);
+        JScrollPane guruScroll = new JScrollPane(guruPanel);
+        guruScroll.setBorder(null);
+        guruScroll.getVerticalScrollBar().setUnitIncrement(12);
+        tabs.addTab("Per Guru", guruScroll);
+
+        // ── Per Kelas tab ──
+        JPanel kelasPanel = new JPanel();
+        kelasPanel.setLayout(new BoxLayout(kelasPanel, BoxLayout.Y_AXIS));
+        kelasPanel.setBackground(C_WHITE);
+        JScrollPane kelasScroll = new JScrollPane(kelasPanel);
+        kelasScroll.setBorder(null);
+        kelasScroll.getVerticalScrollBar().setUnitIncrement(12);
+        tabs.addTab("Per Kelas", kelasScroll);
+
+        // Store references for later population
+        tabs.setName("resultTabs");
+        guruPanel.setName("guruPanel");
+        kelasPanel.setName("kelasPanel");
+
+        outer.add(tabs);
+
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setBackground(C_WHITE);
+        wrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
+        wrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, 320));
         wrapper.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(C_BORDER, 1, true),
                 BorderFactory.createEmptyBorder(14, 20, 14, 20)));
@@ -773,6 +840,26 @@ public class SchedulerUI extends JFrame {
 
         inputFilePath  = inPath;
         outputFilePath = tfOutputFile.getText().trim().isEmpty() ? "output-jadwal.xlsx" : tfOutputFile.getText().trim();
+
+        // Auto-rename jika file sudah ada
+        File of = new File(outputFilePath);
+        if (of.exists()) {
+            String name = of.getName();
+            int dot = name.lastIndexOf('.');
+            String base = (dot > 0) ? name.substring(0, dot) : name;
+            String ext  = (dot > 0) ? name.substring(dot) : "";
+            String parent = of.getParent();
+            if (parent == null) parent = ".";
+            int n = 1;
+            File nf;
+            do {
+                nf = new File(parent, base + " (" + n + ")" + ext);
+                n++;
+            } while (nf.exists());
+            outputFilePath = nf.getAbsolutePath();
+            tfOutputFile.setText(outputFilePath);
+            appendLog("  File output sudah ada, rename: " + nf.getName(), LOG_WARN);
+        }
         kelasT7     = kelasVals[0];
         kelasT8     = kelasVals[1];
         kelasT9     = kelasVals[2];
@@ -785,6 +872,7 @@ public class SchedulerUI extends JFrame {
 
         stopRequested = false;
         setProcessing(true);
+        if (pnlResult != null) pnlResult.setVisible(false);
 
         String ts = new SimpleDateFormat("HH:mm:ss").format(new Date());
         appendLog("=".repeat(52), C_MUTED);
@@ -842,6 +930,13 @@ public class SchedulerUI extends JFrame {
         if (processing) setStatus("Memproses jadwal...", C_WARN);
     }
 
+    // --- Data passing from Main ----------------------------------------------
+    public static void setData(String[][] jadwal, int[][] hariRange, List<String[]> kebutuhan) {
+        scheduleJadwal = jadwal;
+        scheduleHariRange = hariRange;
+        scheduleKebutuhan = kebutuhan;
+    }
+
     // --- Public API ----------------------------------------------------------
     public static void markDone(boolean success, String extraMessage) {
         SwingUtilities.invokeLater(() -> {
@@ -860,21 +955,7 @@ public class SchedulerUI extends JFrame {
                 instance.appendLog("  File : " + outputFilePath, LOG_TEXT);
                 instance.appendLog("=".repeat(52), C_MUTED);
                 instance.setStatus("Selesai  -  " + new File(outputFilePath).getName(), C_SUCCESS);
-
-                Object[] options = {"Oke", "Buka Folder Output"};
-                int choice = JOptionPane.showOptionDialog(instance,
-                        "<html><div style='padding:8px'>"
-                                + "<b style='font-size:14px;color:#059669'>Jadwal berhasil digenerate!</b>"
-                                + "<br><br>File disimpan di:<br>"
-                                + "<code style='font-size:11px'>" + outputFilePath + "</code>"
-                                + "</div></html>",
-                        "Berhasil", JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE,
-                        null, options, options[0]);
-
-                if (choice == 1) {
-                    try { Desktop.getDesktop().open(new File(outputFilePath).getAbsoluteFile().getParentFile()); }
-                    catch (Exception ex) { JOptionPane.showMessageDialog(instance, "Tidak bisa membuka folder: " + ex.getMessage()); }
-                }
+                instance.showResultPanel();
             } else {
                 instance.appendLog("-".repeat(52), C_MUTED);
                 instance.appendLog("  Gagal / Dihentikan  [" + ts + "]", LOG_ERR);
@@ -905,6 +986,618 @@ public class SchedulerUI extends JFrame {
                 }
             }
         });
+    }
+
+    // --- Result panel ---------------------------------------------------------
+    private void showResultPanel() {
+        if (scheduleJadwal == null || scheduleKebutuhan == null) return;
+
+        // Find the tabs and panels via name
+        JTabbedPane tabs = null;
+        for (java.awt.Component c : pnlResult.getComponents()) {
+            if (c instanceof javax.swing.JPanel) {
+                for (java.awt.Component c2 : ((javax.swing.JPanel)c).getComponents()) {
+                    if (c2 instanceof JTabbedPane) { tabs = (JTabbedPane) c2; break; }
+                }
+            }
+        }
+        if (tabs == null) return;
+
+        // ── Populate Per Guru tab ──
+        JScrollPane guruScroll = (JScrollPane) tabs.getComponentAt(0);
+        JPanel guruPanel = (JPanel) guruScroll.getViewport().getView();
+        guruPanel.removeAll();
+
+        // Collect unique teachers
+        java.util.Map<String, String> guruMap = new java.util.LinkedHashMap<>();
+        for (String[] data : scheduleKebutuhan) {
+            String num = data[0].replaceAll("[^0-9]", "");
+            if (!guruMap.containsKey(num))
+                guruMap.put(num, data[1]);
+        }
+        java.util.List<String> guruList = new java.util.ArrayList<>(guruMap.keySet());
+        guruList.sort(java.util.Comparator.comparingInt(Integer::parseInt));
+
+        for (String guruNum : guruList) {
+            String namaGuru = guruMap.get(guruNum);
+            JPanel row = new JPanel(new BorderLayout(8, 0));
+            row.setOpaque(false);
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+            row.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+
+            JLabel lbl = new JLabel("  Guru " + guruNum + " - " + namaGuru);
+            lbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            lbl.setForeground(C_TEXT);
+
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+            btnPanel.setOpaque(false);
+
+            JButton btnExcel = new JButton("Excel");
+            btnExcel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            btnExcel.setBackground(C_WHITE);
+            btnExcel.setForeground(C_PRIMARY);
+            btnExcel.setFocusPainted(false);
+            btnExcel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(191, 219, 254), 1, true),
+                    BorderFactory.createEmptyBorder(4, 10, 4, 10)));
+            btnExcel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            String gNum = guruNum;
+            btnExcel.addActionListener(e -> onExportGuruExcel(gNum));
+
+            JButton btnCetak = new JButton("Cetak");
+            btnCetak.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            btnCetak.setBackground(C_WHITE);
+            btnCetak.setForeground(C_SUCCESS);
+            btnCetak.setFocusPainted(false);
+            btnCetak.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(167, 243, 208), 1, true),
+                    BorderFactory.createEmptyBorder(4, 10, 4, 10)));
+            btnCetak.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            btnCetak.addActionListener(e -> onPrintGuru(gNum, namaGuru));
+
+            btnPanel.add(btnExcel);
+            btnPanel.add(btnCetak);
+
+            row.add(lbl, BorderLayout.CENTER);
+            row.add(btnPanel, BorderLayout.EAST);
+            guruPanel.add(row);
+            guruPanel.add(Box.createVerticalStrut(2));
+        }
+
+        // ── Populate Per Kelas tab ──
+        JScrollPane kelasScroll = (JScrollPane) tabs.getComponentAt(1);
+        JPanel kelasPanel = (JPanel) kelasScroll.getViewport().getView();
+        kelasPanel.removeAll();
+
+        String[] allKelas = Main.buatDaftarKelas();
+        for (int kIdx = 0; kIdx < allKelas.length; kIdx++) {
+            String namaKelas = allKelas[kIdx];
+            JPanel row = new JPanel(new BorderLayout(8, 0));
+            row.setOpaque(false);
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+            row.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+
+            JLabel lbl = new JLabel("  Kelas " + namaKelas);
+            lbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            lbl.setForeground(C_TEXT);
+
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+            btnPanel.setOpaque(false);
+
+            JButton btnExcel = new JButton("Excel");
+            btnExcel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            btnExcel.setBackground(C_WHITE);
+            btnExcel.setForeground(C_PRIMARY);
+            btnExcel.setFocusPainted(false);
+            btnExcel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(191, 219, 254), 1, true),
+                    BorderFactory.createEmptyBorder(4, 10, 4, 10)));
+            btnExcel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            int kIdxFinal = kIdx;
+            btnExcel.addActionListener(e -> onExportKelasExcel(kIdxFinal));
+
+            JButton btnCetak = new JButton("Cetak");
+            btnCetak.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            btnCetak.setBackground(C_WHITE);
+            btnCetak.setForeground(C_SUCCESS);
+            btnCetak.setFocusPainted(false);
+            btnCetak.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(167, 243, 208), 1, true),
+                    BorderFactory.createEmptyBorder(4, 10, 4, 10)));
+            btnCetak.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            btnCetak.addActionListener(e -> onPrintKelas(kIdxFinal, namaKelas));
+
+            btnPanel.add(btnExcel);
+            btnPanel.add(btnCetak);
+
+            row.add(lbl, BorderLayout.CENTER);
+            row.add(btnPanel, BorderLayout.EAST);
+            kelasPanel.add(row);
+            kelasPanel.add(Box.createVerticalStrut(2));
+        }
+
+        // Show the panel
+        pnlResult.setVisible(true);
+        // Scroll to top
+        SwingUtilities.invokeLater(() -> {
+            java.awt.Container parent = pnlResult.getParent();
+            while (parent != null && !(parent instanceof JScrollPane))
+                parent = parent.getParent();
+            if (parent instanceof JScrollPane) {
+                ((JScrollPane) parent).getVerticalScrollBar().setValue(0);
+            }
+        });
+    }
+
+    private void onExportGuruExcel(String guruNum) {
+        try {
+            String namaGuru = "";
+            for (String[] data : scheduleKebutuhan) {
+                String num = data[0].replaceAll("[^0-9]","");
+                if (num.equals(guruNum)) { namaGuru = data[1]; break; }
+            }
+            String fileName = "Guru_" + guruNum + "_" + namaGuru.replaceAll("[^a-zA-Z0-9]", "_") + ".xlsx";
+            JFileChooser fc = new JFileChooser();
+            fc.setDialogTitle("Simpan Excel Guru");
+            fc.setSelectedFile(new File(fileName));
+            if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+            File outFile = fc.getSelectedFile();
+            if (outFile == null) return;
+            String path = outFile.getAbsolutePath();
+            if (!path.endsWith(".xlsx")) path += ".xlsx";
+            Main.exportSingleGuruToFile(guruNum, scheduleJadwal, scheduleHariRange, scheduleKebutuhan, path);
+            appendLog("  Excel guru " + guruNum + " -> " + outFile.getName(), LOG_OK);
+            Desktop.getDesktop().open(new File(path));
+        } catch (Exception ex) {
+            appendLog("  Gagal export guru " + guruNum + ": " + ex.getMessage(), LOG_ERR);
+            JOptionPane.showMessageDialog(this, "Gagal export Excel:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onExportKelasExcel(int kelasIdx) {
+        try {
+            String[] allKelas = Main.buatDaftarKelas();
+            String namaKelas = allKelas[kelasIdx];
+            String fileName = "Kelas_" + namaKelas + ".xlsx";
+            JFileChooser fc = new JFileChooser();
+            fc.setDialogTitle("Simpan Excel Kelas");
+            fc.setSelectedFile(new File(fileName));
+            if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+            File outFile = fc.getSelectedFile();
+            if (outFile == null) return;
+            String path = outFile.getAbsolutePath();
+            if (!path.endsWith(".xlsx")) path += ".xlsx";
+            Main.exportSingleKelasToFile(kelasIdx, scheduleJadwal, scheduleHariRange, scheduleKebutuhan, path);
+            appendLog("  Excel kelas " + namaKelas + " -> " + outFile.getName(), LOG_OK);
+            Desktop.getDesktop().open(new File(path));
+        } catch (Exception ex) {
+            appendLog("  Gagal export kelas: " + ex.getMessage(), LOG_ERR);
+            JOptionPane.showMessageDialog(this, "Gagal export Excel:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onPrintGuru(String guruNum, String namaGuru) {
+        Object[] result = Main.generateGuruPreview(guruNum, scheduleJadwal, scheduleHariRange, scheduleKebutuhan);
+        String[][] data = (String[][]) result[0];
+        String[] headers = (String[]) result[1];
+        int totalJam = 0;
+        for (int r = 1; r < data.length; r++) {
+            String jam = data[r][1];
+            String kls = data[r][3];
+            if (jam != null && !jam.isEmpty()
+                && kls != null && !kls.isEmpty()
+                && !kls.contains("Sholat") && !kls.contains("Istirahat")) {
+                totalJam++;
+            }
+        }
+        String[] infoLines = {
+            "KODE GURU       : " + guruNum,
+            "NAMA GURU       : " + namaGuru,
+            "JUMLAH MENGAJAR : " + totalJam + " JAM"
+        };
+        showPrintPreview("Guru " + guruNum + " - " + namaGuru, data, headers, infoLines);
+    }
+
+    private void onPrintKelas(int kelasIdx, String namaKelas) {
+        Object[] result = Main.generateKelasPreview(kelasIdx, scheduleJadwal, scheduleHariRange, scheduleKebutuhan);
+        String[][] data = (String[][]) result[0];
+        String[] headers = (String[]) result[1];
+        String[] infoLines = { "KELAS : " + namaKelas };
+        showPrintPreview("Kelas " + namaKelas, data, headers, infoLines);
+    }
+
+    private void showPrintPreview(String title, String[][] data, String[] headers, String[] infoLines) {
+        // Save original HARI values before in-place merge
+        String[] originalHari = new String[data.length];
+        for (int r = 1; r < data.length; r++) {
+            originalHari[r] = data[r][0];
+        }
+
+        // Merge HARI in-place: hanya tampilkan di baris pertama tiap hari
+        String lastHari = data.length > 1 ? data[1][0] : "";
+        for (int r = 2; r < data.length; r++) {
+            if (data[r][0].equals(lastHari)) {
+                data[r][0] = "";
+            } else {
+                lastHari = data[r][0];
+            }
+        }
+
+        // Split data by day (using original hari values)
+        java.util.LinkedHashMap<String, java.util.List<String[]>> dayData = new java.util.LinkedHashMap<>();
+        String curDay = "";
+        for (int r = 1; r < data.length; r++) {
+            String day = originalHari[r];
+            if (!day.isEmpty()) curDay = day;
+            String[] rowCopy = data[r].clone();
+            dayData.computeIfAbsent(curDay, k -> new java.util.ArrayList<>()).add(rowCopy);
+        }
+
+        // Merge HARI within each day's copy
+        for (java.util.List<String[]> rows : dayData.values()) {
+            if (!rows.isEmpty()) {
+                String first = rows.get(0)[0];
+                for (int ri = 1; ri < rows.size(); ri++) {
+                    rows.get(ri)[0] = "";
+                }
+            }
+        }
+
+        // Active day list (only days with data)
+        String[] dayOrder = {"SENIN","SELASA","RABU","KAMIS","JUMAT"};
+        java.util.List<String> activeDays = new java.util.ArrayList<>();
+        for (String d : dayOrder) {
+            if (dayData.containsKey(d) && !dayData.get(d).isEmpty()) activeDays.add(d);
+        }
+        if (activeDays.isEmpty()) return;
+
+        // --- Dialog ---
+        JDialog dialog = new JDialog(this, "Preview - " + title, true);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.setSize(820, 620);
+        dialog.setLocationRelativeTo(this);
+
+        // Title + info header
+        JPanel infoPanel = new JPanel();
+        infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
+        infoPanel.setBackground(Color.WHITE);
+        infoPanel.setBorder(BorderFactory.createEmptyBorder(6, 16, 0, 16));
+        for (String line : infoLines) {
+            JLabel lbl = new JLabel(line);
+            lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            lbl.setForeground(new Color(30, 41, 59));
+            infoPanel.add(lbl);
+        }
+
+        JLabel lblTitle = new JLabel("Jadwal - " + title);
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        lblTitle.setBorder(BorderFactory.createEmptyBorder(8, 12, 2, 12));
+        lblTitle.setForeground(new Color(30, 41, 59));
+
+        // Day buttons
+        JPanel dayBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+        dayBtnPanel.setBackground(Color.WHITE);
+        dayBtnPanel.setBorder(BorderFactory.createEmptyBorder(2, 12, 4, 12));
+        Color btnNormalBg = Color.WHITE;
+        Color btnNormalFg = new Color(37, 99, 235);
+        Color btnSelBg    = new Color(219, 234, 254);  // light blue
+        Color btnSelFg    = new Color(37, 99, 235);    // blue text (always visible)
+        java.util.List<JButton> dayBtns = new java.util.ArrayList<>();
+        for (String day : activeDays) {
+            JButton btn = new JButton(day);
+            btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            btn.setFocusPainted(false);
+            btn.setBackground(btnNormalBg);
+            btn.setForeground(btnNormalFg);
+            btn.setOpaque(true);
+            btn.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(37, 99, 235), 1, true),
+                BorderFactory.createEmptyBorder(4, 14, 4, 14)));
+            dayBtns.add(btn);
+            dayBtnPanel.add(btn);
+        }
+
+        // JTable — initially empty
+        DefaultTableModel tableModel = new DefaultTableModel(headers, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        JTable table = new JTable(tableModel);
+        table.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        table.getTableHeader().setBackground(new Color(37, 99, 235));
+        table.getTableHeader().setForeground(Color.WHITE);
+        table.getTableHeader().setReorderingAllowed(false);
+        table.setRowHeight(24);
+        table.setShowGrid(true);
+        table.setGridColor(new Color(209, 213, 219));
+        table.setIntercellSpacing(new Dimension(1, 1));
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
+
+        boolean isGuruTbl = headers.length > 3 && "KLS".equals(headers[3]);
+        table.getColumnModel().getColumn(0).setPreferredWidth(isGuruTbl ? 60 : 55);
+        table.getColumnModel().getColumn(1).setPreferredWidth(30);
+        table.getColumnModel().getColumn(2).setPreferredWidth(120);
+        table.getColumnModel().getColumn(3).setPreferredWidth(isGuruTbl ? 70 : 140);
+        table.getColumnModel().getColumn(4).setPreferredWidth(isGuruTbl ? 220 : 200);
+
+        // Alternating row colors + special row detection
+        Color bgLight = new Color(239, 246, 255);
+        Color bgCyan  = new Color(219, 234, 254);
+        table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean fcs, int r, int c) {
+                Component comp = super.getTableCellRendererComponent(t, v, sel, fcs, r, c);
+                if (!sel && t.isEnabled()) {
+                    String txt = v != null ? v.toString() : "";
+                    boolean special = txt.contains("Sholat") || txt.contains("Istirahat");
+                    if (special) {
+                        comp.setBackground(bgCyan);
+                        if (comp instanceof JLabel) ((JLabel) comp).setFont(t.getFont().deriveFont(Font.ITALIC));
+                    } else {
+                        comp.setBackground(r % 2 == 0 ? bgLight : Color.WHITE);
+                        if (comp instanceof JLabel) ((JLabel) comp).setFont(t.getFont());
+                    }
+                }
+                return comp;
+            }
+        });
+
+        // Populate first day
+        String[] finalActiveDays = activeDays.toArray(new String[0]);
+        {
+            java.util.List<String[]> dayRows = dayData.get(finalActiveDays[0]);
+            for (String[] row : dayRows) tableModel.addRow(row);
+            dayBtns.get(0).setBackground(btnSelBg);
+            dayBtns.get(0).setForeground(btnSelFg);
+        }
+
+        // Day button actions
+        for (int bi = 0; bi < finalActiveDays.length; bi++) {
+            final int idx = bi;
+            String day = finalActiveDays[idx];
+            JButton btn = dayBtns.get(idx);
+            btn.addActionListener(ev -> {
+                // Update button highlights
+                for (int j = 0; j < finalActiveDays.length; j++) {
+                    boolean isThis = j == idx;
+                    dayBtns.get(j).setBackground(isThis ? btnSelBg : btnNormalBg);
+                    dayBtns.get(j).setForeground(isThis ? btnSelFg : btnNormalFg);
+                }
+                // Update table
+                tableModel.setRowCount(0);
+                java.util.List<String[]> rows = dayData.get(day);
+                for (String[] row : rows) tableModel.addRow(row);
+                SwingUtilities.invokeLater(() -> {
+                    if (table.getParent() != null) table.scrollRectToVisible(new Rectangle(0, 0, 1, 1));
+                });
+            });
+        }
+
+        JScrollPane sp = new JScrollPane(table);
+        sp.setBorder(BorderFactory.createEmptyBorder(2, 10, 6, 10));
+
+        // --- Print button ---
+        JButton btnPrint = new JButton("Print");
+        btnPrint.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btnPrint.setBackground(C_PRIMARY);
+        btnPrint.setForeground(Color.WHITE);
+        btnPrint.setFocusPainted(false);
+        btnPrint.setBorderPainted(false);
+        btnPrint.setPreferredSize(new Dimension(100, 36));
+        btnPrint.addActionListener(e -> {
+            try {
+                PrinterJob job = PrinterJob.getPrinterJob();
+                job.setJobName("Jadwal - " + title);
+
+                // Fix day data for print (each day = one section with day header + table)
+                final String[] printDays = finalActiveDays;
+                final java.util.Map<String, java.util.List<String[]>> printDayData = dayData;
+
+                job.setPrintable((graphics, pageFormat, pageIndex) -> {
+                    Graphics2D g = (Graphics2D) graphics;
+                    g.translate(pageFormat.getImageableX(), pageFormat.getImageableY());
+
+                    boolean isGuru = headers.length > 3 && "KLS".equals(headers[3]);
+                    int[] colRatios = isGuru
+                        ? new int[]{80, 50, 160, 100, 300}
+                        : new int[]{80, 50, 160, 250, 250};
+                    int ratioSum = 0;
+                    for (int v : colRatios) ratioSum += v;
+                    int totalW = (int) pageFormat.getImageableWidth() - 10;
+                    int[] colW = new int[colRatios.length];
+                    for (int i = 0; i < colRatios.length; i++)
+                        colW[i] = totalW * colRatios[i] / ratioSum;
+
+                    int x0 = 4;
+                    int padX = 6;
+                    int rowH = 18;
+                    int dayHdrH = 22;
+                    int spacer = 4;
+
+                    g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+                    // Header area height (info + table header, no title in print)
+                    g.setFont(new Font("Segoe UI", Font.BOLD, 10));
+                    int infoH = g.getFontMetrics().getHeight() * infoLines.length + 6;
+                    int hdrH = g.getFontMetrics().getHeight() + 8;
+                    int headerAreaH = infoH + hdrH;
+                    int availH = (int) pageFormat.getImageableHeight();
+
+                    // Build day section heights: day header + table header + rows
+                    int[] dayHeights = new int[printDays.length];
+                    for (int d = 0; d < printDays.length; d++) {
+                        int rc = printDayData.get(printDays[d]).size();
+                        dayHeights[d] = dayHdrH + hdrH + rowH * rc + spacer;
+                    }
+
+                    // Allocate pages (group days that fit after header)
+                    java.util.List<int[]> pageAlloc = new java.util.ArrayList<>();
+                    int di = 0;
+                    while (di < printDays.length) {
+                        int startDi = di;
+                        int usedH = 0;
+                        boolean firstDay = true;
+                        while (di < printDays.length) {
+                            int need = dayHeights[di];
+                            if (usedH + need <= availH - headerAreaH) {
+                                usedH += need;
+                                firstDay = false;
+                                di++;
+                            } else {
+                                break;
+                            }
+                        }
+                        if (firstDay && di < printDays.length) {
+                            // Force at least one day per page
+                            usedH = dayHeights[di];
+                            di++;
+                        }
+                        pageAlloc.add(new int[]{startDi, di - 1});
+                    }
+                    if (pageIndex >= pageAlloc.size()) return Printable.NO_SUCH_PAGE;
+                    int[] pd = pageAlloc.get(pageIndex);
+
+                    // --- Draw info lines + table header (repeated on every page) ---
+                    int ry = 0;
+
+                    g.setFont(new Font("Segoe UI", Font.BOLD, 10));
+                    FontMetrics ifm = g.getFontMetrics();
+                    g.setColor(new Color(30, 41, 59));
+                    for (String line : infoLines) {
+                        g.drawString(line, x0, ry + ifm.getAscent());
+                        ry += ifm.getHeight();
+                    }
+                    ry += 6;
+
+                    // --- Each day on this page ---
+                    for (int d = pd[0]; d <= pd[1]; d++) {
+                        String dayName = printDays[d];
+                        java.util.List<String[]> dayRows = printDayData.get(dayName);
+                        if (dayRows == null || dayRows.isEmpty()) continue;
+
+                        // Day header bar
+                        g.setColor(new Color(209, 213, 219));
+                        g.fillRect(x0, ry, totalW, dayHdrH);
+                        g.setFont(new Font("Segoe UI", Font.BOLD, 11));
+                        FontMetrics dhfm = g.getFontMetrics();
+                        int dhTextX = x0 + (totalW - dhfm.stringWidth(dayName)) / 2;
+                        int dhTextY = ry + (dayHdrH - dhfm.getHeight()) / 2 + dhfm.getAscent();
+                        g.setColor(new Color(30, 41, 59));
+                        g.drawString(dayName, dhTextX, dhTextY);
+                        ry += dayHdrH;
+
+                        // Table header
+                        g.setFont(new Font("Segoe UI", Font.BOLD, 10));
+                        FontMetrics hfm = g.getFontMetrics();
+                        g.setColor(new Color(209, 213, 219));
+                        g.fillRect(x0, ry, totalW, hdrH);
+                        g.setColor(Color.BLACK);
+                        int cx = x0 + padX;
+                        for (int c = 0; c < headers.length; c++) {
+                            g.drawString(headers[c], cx, ry + (hdrH - hfm.getHeight()) / 2 + hfm.getAscent());
+                            cx += colW[c];
+                        }
+                        int tableHeaderBottom = ry + hdrH;
+                        ry += hdrH;
+
+                        // Data rows
+                        g.setFont(new Font("Segoe UI", Font.PLAIN, 9));
+                        FontMetrics dfm = g.getFontMetrics();
+                        int dataStartRow = ry;
+                        for (String[] row : dayRows) {
+                            boolean isSpecial = false;
+                            for (String v : row) {
+                                if (v != null && (v.contains("Sholat") || v.contains("Istirahat"))) {
+                                    isSpecial = true;
+                                    break;
+                                }
+                            }
+
+                            if (isSpecial)
+                                g.setColor(new Color(219, 234, 254));
+                            else if ((d + (dayRows.indexOf(row))) % 2 == 0)
+                                g.setColor(new Color(239, 246, 255));
+                            else
+                                g.setColor(Color.WHITE);
+                            g.fillRect(x0, ry, totalW, rowH);
+
+                            if (isSpecial)
+                                g.setFont(new Font("Segoe UI", Font.ITALIC, 9));
+                            g.setColor(Color.BLACK);
+                            cx = x0 + padX;
+                            for (int c = 0; c < row.length && c < colW.length; c++) {
+                                String v = row[c] != null ? row[c] : "";
+                                int textY = ry + (rowH - dfm.getHeight()) / 2 + dfm.getAscent();
+                                g.drawString(v, cx, textY);
+                                cx += colW[c];
+                            }
+                            if (isSpecial)
+                                g.setFont(new Font("Segoe UI", Font.PLAIN, 9));
+
+                            ry += rowH;
+                        }
+                        int dataEndRow = ry;
+
+                        // Grid lines for this day
+                        int gridH = dataEndRow - dataStartRow;
+                        if (gridH > 0) {
+                            g.setStroke(new BasicStroke(2f));
+                            g.setColor(new Color(156, 163, 175));
+                            // Horizontal
+                            for (int gr = 0; gr <= (gridH / rowH); gr++) {
+                                int ly = dataStartRow + gr * rowH;
+                                g.drawLine(x0, ly, x0 + totalW, ly);
+                            }
+                            // Vertical
+                            cx = x0;
+                            for (int c = 0; c <= colW.length; c++) {
+                                g.drawLine(cx, dataStartRow, cx, dataEndRow);
+                                if (c < colW.length) cx += colW[c];
+                            }
+                            g.setStroke(new BasicStroke(1f));
+                        }
+
+                        ry += spacer;
+                    }
+
+                    return Printable.PAGE_EXISTS;
+                });
+
+                if (job.printDialog()) {
+                    job.print();
+                    appendLog("  Cetak " + title + " dikirim ke printer", LOG_OK);
+                }
+            } catch (Exception ex) {
+                appendLog("  Gagal cetak: " + ex.getMessage(), LOG_ERR);
+                JOptionPane.showMessageDialog(dialog, "Gagal mencetak:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        // --- Layout ---
+        JPanel topPanel = new JPanel(new BorderLayout());
+        JPanel titleInfo = new JPanel(new BorderLayout());
+        titleInfo.setBackground(Color.WHITE);
+        titleInfo.add(lblTitle, BorderLayout.NORTH);
+        titleInfo.add(infoPanel, BorderLayout.CENTER);
+
+        JPanel centerArea = new JPanel(new BorderLayout());
+        centerArea.add(dayBtnPanel, BorderLayout.NORTH);
+        centerArea.add(sp, BorderLayout.CENTER);
+
+        topPanel.add(titleInfo, BorderLayout.NORTH);
+        topPanel.add(centerArea, BorderLayout.CENTER);
+
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
+        bottom.add(btnPrint);
+        JButton btnClose = new JButton("Tutup");
+        btnClose.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        btnClose.addActionListener(ev -> dialog.dispose());
+        bottom.add(btnClose);
+
+        dialog.setLayout(new BorderLayout());
+        dialog.add(topPanel, BorderLayout.CENTER);
+        dialog.add(bottom, BorderLayout.SOUTH);
+        dialog.setVisible(true);
     }
 
     // --- Helpers -------------------------------------------------------------

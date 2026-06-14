@@ -424,6 +424,7 @@ public class Main {
             System.out.println("Waktu eksekusi: " + String.format("%.2f", durasiMenit) + " menit");
         }
         exportJadwalToExcel(jadwal, hariRange, SchedulerUI.outputFilePath, kebutuhan);
+        SchedulerUI.setData(jadwal, hariRange, kebutuhan);
         SchedulerUI.markDone(true, null);
 
 
@@ -1179,6 +1180,7 @@ public class Main {
             // =====================================================================
             sheet.createFreezePane(3, 2);
 
+            exportRekapMapel((XSSFWorkbook) wb, jadwal, kebutuhan);
             exportSheetGuru((XSSFWorkbook) wb, jadwal, hariRange, kebutuhan);
             exportSheetKelas((XSSFWorkbook) wb, jadwal, hariRange, kebutuhan);
 
@@ -1549,9 +1551,500 @@ public class Main {
     }
 
     // =======================================================================
+    // REKAP MAPEL — sheet ringkasan jam mengajar per mapel per kelas
+    // =======================================================================
+    static void exportRekapMapel(XSSFWorkbook wb, String[][] jadwal, List<String[]> kebutuhan) throws Exception {
+        final String WHITE = "FFFFFF";
+        final String LGRAY = "F2F2F2";
+        final String BLUE  = "2563EB";
+
+        // Build: guruNum|kelasIdx -> subject
+        Map<String, String> guruKelasMapel = new HashMap<>();
+        for (String[] d : kebutuhan) {
+            String num = d[0].replaceAll("[^0-9]", "");
+            guruKelasMapel.put(num + "|" + d[3], d[2]);
+        }
+
+        // Also collect guruNum -> namaGuru
+        Map<String, String> guruNama = new HashMap<>();
+        for (String[] d : kebutuhan) {
+            String num = d[0].replaceAll("[^0-9]", "");
+            guruNama.putIfAbsent(num, d[1]);
+        }
+
+        // Count unique teachers: subject -> Set<String>[3] (teacher IDs per grade 7,8,9)
+        Map<String, Set<String>[]> teacherMap = new LinkedHashMap<>();
+        int totalKelas = jadwal[0].length;
+        int k7 = SchedulerUI.kelasT7;
+        int k8 = SchedulerUI.kelasT8;
+
+        for (int r = 0; r < jadwal.length; r++) {
+            for (int k = 0; k < totalKelas; k++) {
+                String cell = jadwal[r][k];
+                if (cell == null || cell.isEmpty()) continue;
+                String num = cell.replaceAll("[^0-9]", "");
+                String subject = guruKelasMapel.get(num + "|" + k);
+                if (subject == null) continue;
+                int gradeIdx;
+                if (k < k7) gradeIdx = 0;
+                else if (k < k7 + k8) gradeIdx = 1;
+                else gradeIdx = 2;
+                teacherMap.computeIfAbsent(subject, s -> {
+                    @SuppressWarnings("unchecked")
+                    Set<String>[] sets = new Set[]{new HashSet<>(), new HashSet<>(), new HashSet<>()};
+                    return sets;
+                })[gradeIdx].add(num);
+            }
+        }
+
+        XSSFSheet sheet = wb.createSheet("Rekap Mapel");
+        sheet.setDefaultRowHeightInPoints(14);
+
+        XSSFFont fN = guruFont(wb, 10, false);
+        XSSFFont fB = guruFont(wb, 10, true);
+        XSSFFont fBW = guruFont(wb, 10, true);
+        fBW.setColor(IndexedColors.WHITE.getIndex());
+
+        int[] cw = {4, 28, 20, 20, 20};
+        String[] cols = {"NO", "MAPEL", "KELAS 7", "KELAS 8", "KELAS 9"};
+        for (int i = 0; i < cw.length; i++) sheet.setColumnWidth(i, cw[i] * 256);
+
+        int rowIdx = 0;
+
+        // Title bar
+        Row rTitle = sheet.createRow(rowIdx++); rTitle.setHeightInPoints(22);
+        guruCell(wb, rTitle, 0, "REKAP JUMLAH GURU PER MAPEL", fBW, BLUE, HorizontalAlignment.LEFT, false, false);
+        for (int i = 1; i < cols.length; i++) {
+            guruCell(wb, rTitle, i, "", fN, BLUE, HorizontalAlignment.CENTER, false, false);
+        }
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 4));
+
+        rowIdx++;
+
+        // Table header
+        Row rH = sheet.createRow(rowIdx++);
+        for (int i = 0; i < cols.length; i++) {
+            guruCell(wb, rH, i, cols[i], fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+        }
+
+        // Integer format for numeric columns
+        XSSFCellStyle intStyle = guruStyle(wb, fN, WHITE, HorizontalAlignment.CENTER, true, true);
+        intStyle.setDataFormat(wb.createDataFormat().getFormat("0"));
+
+        // Data rows
+        int no = 1;
+        for (Map.Entry<String, Set<String>[]> entry : teacherMap.entrySet()) {
+            Set<String>[] sets = entry.getValue();
+            int total = sets[0].size() + sets[1].size() + sets[2].size();
+            if (total == 0) continue;
+            Row row = sheet.createRow(rowIdx++);
+            guruCell(wb, row, 0, String.valueOf(no++), fN, WHITE, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, row, 1, entry.getKey(),       fN, WHITE, HorizontalAlignment.LEFT, true, true);
+            row.createCell(2).setCellValue(sets[0].size()); row.getCell(2).setCellStyle(intStyle);
+            row.createCell(3).setCellValue(sets[1].size()); row.getCell(3).setCellStyle(intStyle);
+            row.createCell(4).setCellValue(sets[2].size()); row.getCell(4).setCellStyle(intStyle);
+        }
+    }
+
+    // =======================================================================
+    // PREVIEW DATA (for SchedulerUI [Cetak] panel)
+    // =======================================================================
+    static Object[] generateGuruPreview(String guruNum, String[][] jadwal, int[][] hariRange,
+                                        List<String[]> kebutuhan) {
+        final String[] WAKTU_BARIS = {
+            "06.30 - 07.15","07.15 - 07.55","07.55 - 08.35","08.35 - 09.15","09.15 - 09.55",
+            "09.55 - 10.25","10.25 - 11.05","11.05 - 11.45","11.45 - 12.20",
+            "12.20 - 13.00","13.00 - 13.40","13.40 - 14.20","14.20 - 15.00"
+        };
+        final String[] JAM_KE     = {null,"1","2","3","4",null,"5","6",null,"7","8","9","10"};
+        final String[] LBL_KHUSUS = {"Sholat Dhuha",null,null,null,null,"Istirahat",null,null,"Sholat Zuhur",null,null,null,null};
+        final String[] NAMA_HARI  = {"SENIN","SELASA","RABU","KAMIS","JUMAT"};
+        final int barisPer = WAKTU_BARIS.length;
+
+        String[] allKelas = buatDaftarKelas();
+
+        Map<String, String> guruKelasMapel = new HashMap<>();
+        for (String[] data : kebutuhan) {
+            String num = data[0].replaceAll("[^0-9]","");
+            try {
+                int kIdx = Integer.parseInt(data[3]);
+                guruKelasMapel.put(num+"|"+kIdx, data[2]);
+            } catch (Exception ignored) {}
+        }
+
+        java.util.List<String[]> rows = new java.util.ArrayList<>();
+        rows.add(new String[]{"HARI","JAM","WAKTU","KLS","MATA PELAJARAN"});
+
+        for (int h = 0; h < hariRange.length; h++) {
+            int start = hariRange[h][0], end = hariRange[h][1];
+            int jamAktual = end - start + 1;
+            int jamKe = 0;
+
+            for (int b = 0; b < barisPer; b++) {
+                if (JAM_KE[b] != null) {
+                    if (jamKe >= jamAktual) break;
+                    jamKe++;
+                } else {
+                    boolean adaJamBerikut = false;
+                    for (int nb = b+1; nb < barisPer; nb++) {
+                        if (JAM_KE[nb] != null && jamKe < jamAktual) { adaJamBerikut = true; break; }
+                    }
+                    if (!adaJamBerikut) break;
+                }
+
+                String hariLabel = NAMA_HARI[h];
+                String jamLabel  = JAM_KE[b] != null ? JAM_KE[b] : "";
+                String waktu     = WAKTU_BARIS[b];
+                String kelas     = "";
+                String mapel     = "";
+
+                if (LBL_KHUSUS[b] != null) {
+                    kelas = LBL_KHUSUS[b];
+                } else {
+                    int slot = start + jamKe - 1;
+                    for (int k = 0; k < allKelas.length; k++) {
+                        if (slot < jadwal.length && k < jadwal[slot].length) {
+                            String isi = jadwal[slot][k];
+                            if (isi != null && !isi.isEmpty() && isi.replaceAll("[^0-9]","").equals(guruNum)) {
+                                kelas = allKelas[k];
+                                mapel = guruKelasMapel.getOrDefault(guruNum + "|" + k, "");
+                                break;
+                            }
+                        }
+                    }
+                }
+                rows.add(new String[]{hariLabel, jamLabel, waktu, kelas, mapel});
+            }
+        }
+        return new Object[]{rows.toArray(new String[0][]), new String[]{"HARI","JAM","WAKTU","KLS","MATA PELAJARAN"}};
+    }
+
+    static Object[] generateKelasPreview(int kelasIdx, String[][] jadwal, int[][] hariRange,
+                                         List<String[]> kebutuhan) {
+        final String[] WAKTU_BARIS = {
+            "06.30 - 07.15","07.15 - 07.55","07.55 - 08.35","08.35 - 09.15","09.15 - 09.55",
+            "09.55 - 10.25","10.25 - 11.05","11.05 - 11.45","11.45 - 12.20",
+            "12.20 - 13.00","13.00 - 13.40","13.40 - 14.20","14.20 - 15.00"
+        };
+        final String[] JAM_KE     = {null,"1","2","3","4",null,"5","6",null,"7","8","9","10"};
+        final String[] LBL_KHUSUS = {"Sholat Dhuha",null,null,null,null,"Istirahat",null,null,"Sholat Zuhur",null,null,null,null};
+        final String[] NAMA_HARI  = {"SENIN","SELASA","RABU","KAMIS","JUMAT"};
+        final int barisPer = WAKTU_BARIS.length;
+
+        Map<String, String> guruNama = new HashMap<>();
+        Map<String, String> guruKelasMapel = new HashMap<>();
+        for (String[] data : kebutuhan) {
+            String num = data[0].replaceAll("[^0-9]","");
+            guruNama.putIfAbsent(num, data[1]);
+            try {
+                int kIdx = Integer.parseInt(data[3]);
+                guruKelasMapel.put(num+"|"+kIdx, data[2]);
+            } catch (Exception ignored) {}
+        }
+
+        java.util.List<String[]> rows = new java.util.ArrayList<>();
+        rows.add(new String[]{"HARI","JAM","WAKTU","MAPEL","NAMA GURU"});
+
+        for (int h = 0; h < hariRange.length; h++) {
+            int start = hariRange[h][0], end = hariRange[h][1];
+            int jamAktual = end - start + 1;
+            int jamKe = 0;
+
+            for (int b = 0; b < barisPer; b++) {
+                if (JAM_KE[b] != null) {
+                    if (jamKe >= jamAktual) break;
+                    jamKe++;
+                } else {
+                    boolean adaJamBerikut = false;
+                    for (int nb = b+1; nb < barisPer; nb++) {
+                        if (JAM_KE[nb] != null && jamKe < jamAktual) { adaJamBerikut = true; break; }
+                    }
+                    if (!adaJamBerikut) break;
+                }
+
+                String hariLabel = NAMA_HARI[h];
+                String jamLabel  = JAM_KE[b] != null ? JAM_KE[b] : "";
+                String waktu     = WAKTU_BARIS[b];
+                String mapel     = "";
+                String guruName  = "";
+
+                if (LBL_KHUSUS[b] != null) {
+                    mapel    = LBL_KHUSUS[b];
+                } else {
+                    int slot = start + jamKe - 1;
+                    if (slot < jadwal.length && kelasIdx < jadwal[slot].length) {
+                        String isi = jadwal[slot][kelasIdx];
+                        if (isi != null && !isi.isEmpty()) {
+                            String guruId = isi.replaceAll("[^0-9]","");
+                            guruName = guruNama.getOrDefault(guruId, "");
+                            mapel = guruKelasMapel.getOrDefault(guruId+"|"+kelasIdx, "");
+                        }
+                    }
+                }
+                rows.add(new String[]{hariLabel, jamLabel, waktu, mapel, guruName});
+            }
+        }
+        return new Object[]{rows.toArray(new String[0][]), new String[]{"HARI","JAM","WAKTU","MAPEL","NAMA GURU"}};
+    }
+
+    // =======================================================================
+    // SINGLE EXPORT (for SchedulerUI [Excel] button)
+    // =======================================================================
+    static void exportSingleGuruToFile(String guruNum, String[][] jadwal, int[][] hariRange,
+                                       List<String[]> kebutuhan, String outputPath) throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            final String WHITE = "FFFFFF";
+            final String LGRAY = "F2F2F2";
+            final String CYAN  = "B2EBF2";
+
+            final String[] WAKTU_BARIS = {
+                "06.30 - 07.15","07.15 - 07.55","07.55 - 08.35","08.35 - 09.15","09.15 - 09.55",
+                "09.55 - 10.25","10.25 - 11.05","11.05 - 11.45","11.45 - 12.20",
+                "12.20 - 13.00","13.00 - 13.40","13.40 - 14.20","14.20 - 15.00"
+            };
+            final String[] JAM_KE     = {null,"1","2","3","4",null,"5","6",null,"7","8","9","10"};
+            final String[] LBL_KHUSUS = {"Sholat Dhuha",null,null,null,null,"Istirahat",null,null,"Sholat Zuhur",null,null,null,null};
+            final String[] NAMA_HARI  = {"SENIN","SELASA","RABU","KAMIS","JUMAT"};
+            final int barisPer = WAKTU_BARIS.length;
+
+            String[] allKelas = buatDaftarKelas();
+            String namaGuru = "";
+            Map<String, String> guruKelasMapel = new HashMap<>();
+            for (String[] data : kebutuhan) {
+                String num = data[0].replaceAll("[^0-9]","");
+                if (num.equals(guruNum) && namaGuru.isEmpty()) namaGuru = data[1];
+                try {
+                    int kIdx = Integer.parseInt(data[3]);
+                    guruKelasMapel.put(num+"|"+kIdx, data[2]);
+                } catch (Exception ignored) {}
+            }
+
+            int totalJam = 0;
+            for (int h = 0; h < hariRange.length; h++) {
+                int start = hariRange[h][0], end = hariRange[h][1];
+                for (int r = start; r <= end; r++) {
+                    for (int k = 0; k < allKelas.length; k++) {
+                        if (k < jadwal[r].length) {
+                            String isi = jadwal[r][k];
+                            if (isi != null && !isi.isEmpty() && isi.replaceAll("[^0-9]","").equals(guruNum)) {
+                                totalJam++;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            String sheetName = "Guru " + guruNum + " - " + namaGuru;
+            XSSFSheet sheet = wb.createSheet(sheetName);
+            sheet.setDefaultRowHeightInPoints(14);
+
+            XSSFFont fN = guruFont(wb, 10, false);
+            XSSFFont fB = guruFont(wb, 10, true);
+            int[] cw = {8,5,16,10,30};
+            for (int i = 0; i < cw.length; i++) sheet.setColumnWidth(i, cw[i]*256);
+
+            int rowIdx = 0;
+            Row r1 = sheet.createRow(rowIdx++); r1.setHeightInPoints(20);
+            guruCell(wb, r1, 0, "KODE GURU", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+            guruCell(wb, r1, 1, ":",          fB, WHITE, HorizontalAlignment.CENTER, false, false);
+            guruCell(wb, r1, 2, guruNum,      fB, WHITE, HorizontalAlignment.LEFT, false, false);
+
+            Row r2 = sheet.createRow(rowIdx++); r2.setHeightInPoints(20);
+            guruCell(wb, r2, 0, "NAMA GURU", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+            guruCell(wb, r2, 1, ":",          fB, WHITE, HorizontalAlignment.CENTER, false, false);
+            guruCell(wb, r2, 2, namaGuru,     fB, WHITE, HorizontalAlignment.LEFT, false, false);
+
+            Row r3 = sheet.createRow(rowIdx++); r3.setHeightInPoints(20);
+            guruCell(wb, r3, 0, "JUMLAH MENGAJAR", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+            guruCell(wb, r3, 1, ":",               fB, WHITE, HorizontalAlignment.CENTER, false, false);
+            guruCell(wb, r3, 2, totalJam + " JAM", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+
+            rowIdx++;
+            Row rH = sheet.createRow(rowIdx++); rH.setHeightInPoints(16);
+            guruCell(wb, rH, 0, "HARI",          fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 1, "JAM",           fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 2, "WAKTU",         fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 3, "KLS",           fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 4, "MATA PELAJARAN",fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+
+            for (int h = 0; h < hariRange.length; h++) {
+                int start = hariRange[h][0], end = hariRange[h][1];
+                int jamAktual = end - start + 1;
+                int startRow = rowIdx;
+                int jamKe = 0;
+
+                for (int b = 0; b < barisPer; b++) {
+                    if (JAM_KE[b] != null) {
+                        if (jamKe >= jamAktual) break;
+                        jamKe++;
+                    } else {
+                        boolean adaJamBerikut = false;
+                        for (int nb = b+1; nb < barisPer; nb++) {
+                            if (JAM_KE[nb] != null && jamKe < jamAktual) { adaJamBerikut = true; break; }
+                        }
+                        if (!adaJamBerikut) break;
+                    }
+
+                    Row row = sheet.createRow(rowIdx++);
+                    row.setHeightInPoints(14);
+
+                    if (LBL_KHUSUS[b] != null) {
+                        guruCell(wb, row, 0, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 1, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, WAKTU_BARIS[b],   fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 3, LBL_KHUSUS[b],    fB, CYAN, HorizontalAlignment.CENTER, true, true);
+                        sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 3, 4));
+                        guruCell(wb, row, 4, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                    } else {
+                        int slot = start + jamKe - 1;
+                        String kelas = "";
+                        String mapel = "";
+                        for (int k = 0; k < allKelas.length; k++) {
+                            if (slot < jadwal.length && k < jadwal[slot].length) {
+                                String isi = jadwal[slot][k];
+                                if (isi != null && !isi.isEmpty() && isi.replaceAll("[^0-9]","").equals(guruNum)) {
+                                    kelas = allKelas[k];
+                                    mapel = guruKelasMapel.getOrDefault(guruNum + "|" + k, "");
+                                    break;
+                                }
+                            }
+                        }
+                        guruCell(wb, row, 0, "",        fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 1, JAM_KE[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, WAKTU_BARIS[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 3, kelas,    fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 4, mapel,    fN, WHITE, HorizontalAlignment.LEFT, true, true);
+                    }
+                }
+                if (startRow < rowIdx) {
+                    sheet.addMergedRegion(new CellRangeAddress(startRow, rowIdx-1, 0, 0));
+                    sheet.getRow(startRow).getCell(0).setCellValue(NAMA_HARI[h]);
+                    sheet.getRow(startRow).getCell(0).setCellStyle(guruStyle(wb, fB, LGRAY, HorizontalAlignment.CENTER, true, true));
+                }
+                sheet.createRow(rowIdx++).setHeightInPoints(6);
+            }
+            try (FileOutputStream fos = new FileOutputStream(outputPath)) { wb.write(fos); }
+        }
+    }
+
+    static void exportSingleKelasToFile(int kelasIdx, String[][] jadwal, int[][] hariRange,
+                                        List<String[]> kebutuhan, String outputPath) throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            final String WHITE = "FFFFFF";
+            final String LGRAY = "F2F2F2";
+            final String CYAN  = "B2EBF2";
+
+            final String[] WAKTU_BARIS = {
+                "06.30 - 07.15","07.15 - 07.55","07.55 - 08.35","08.35 - 09.15","09.15 - 09.55",
+                "09.55 - 10.25","10.25 - 11.05","11.05 - 11.45","11.45 - 12.20",
+                "12.20 - 13.00","13.00 - 13.40","13.40 - 14.20","14.20 - 15.00"
+            };
+            final String[] JAM_KE     = {null,"1","2","3","4",null,"5","6",null,"7","8","9","10"};
+            final String[] LBL_KHUSUS = {"Sholat Dhuha",null,null,null,null,"Istirahat",null,null,"Sholat Zuhur",null,null,null,null};
+            final String[] NAMA_HARI  = {"SENIN","SELASA","RABU","KAMIS","JUMAT"};
+            final int barisPer = WAKTU_BARIS.length;
+
+            String[] allKelas = buatDaftarKelas();
+            String namaKelas = allKelas[kelasIdx];
+
+            Map<String, String> guruNama = new HashMap<>();
+            Map<String, String> guruKelasMapel = new HashMap<>();
+            for (String[] data : kebutuhan) {
+                String num = data[0].replaceAll("[^0-9]","");
+                guruNama.putIfAbsent(num, data[1]);
+                try {
+                    int kIdx = Integer.parseInt(data[3]);
+                    guruKelasMapel.put(num+"|"+kIdx, data[2]);
+                } catch (Exception ignored) {}
+            }
+
+            String sheetName = "Kelas " + namaKelas;
+            XSSFSheet sheet = wb.createSheet(sheetName);
+            sheet.setDefaultRowHeightInPoints(14);
+
+            XSSFFont fN = guruFont(wb, 10, false);
+            XSSFFont fB = guruFont(wb, 10, true);
+            int[] cw = {8,5,16,25,25};
+            for (int i = 0; i < cw.length; i++) sheet.setColumnWidth(i, cw[i]*256);
+
+            int rowIdx = 0;
+            Row rK = sheet.createRow(rowIdx++); rK.setHeightInPoints(20);
+            guruCell(wb, rK, 0, "KELAS", fB, WHITE, HorizontalAlignment.LEFT, false, false);
+            guruCell(wb, rK, 1, ":",      fB, WHITE, HorizontalAlignment.CENTER, false, false);
+            guruCell(wb, rK, 2, namaKelas, fB, WHITE, HorizontalAlignment.LEFT, false, false);
+
+            rowIdx++;
+            Row rH = sheet.createRow(rowIdx++); rH.setHeightInPoints(16);
+            guruCell(wb, rH, 0, "HARI",      fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 1, "JAM",       fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 2, "WAKTU",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 3, "MAPEL",     fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+            guruCell(wb, rH, 4, "NAMA GURU", fB, LGRAY, HorizontalAlignment.CENTER, true, true);
+
+            for (int h = 0; h < hariRange.length; h++) {
+                int start = hariRange[h][0], end = hariRange[h][1];
+                int jamAktual = end - start + 1;
+                int startRow = rowIdx;
+                int jamKe = 0;
+
+                for (int b = 0; b < barisPer; b++) {
+                    if (JAM_KE[b] != null) {
+                        if (jamKe >= jamAktual) break;
+                        jamKe++;
+                    } else {
+                        boolean adaJamBerikut = false;
+                        for (int nb = b+1; nb < barisPer; nb++) {
+                            if (JAM_KE[nb] != null && jamKe < jamAktual) { adaJamBerikut = true; break; }
+                        }
+                        if (!adaJamBerikut) break;
+                    }
+
+                    Row row = sheet.createRow(rowIdx++);
+                    row.setHeightInPoints(14);
+
+                    if (LBL_KHUSUS[b] != null) {
+                        guruCell(wb, row, 0, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 1, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, WAKTU_BARIS[b],   fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 3, LBL_KHUSUS[b],    fB, CYAN, HorizontalAlignment.CENTER, true, true);
+                        sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 3, 4));
+                        guruCell(wb, row, 4, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                    } else {
+                        int slot = start + jamKe - 1;
+                        String guruId = "";
+                        String mapel = "";
+                        String guruName = "";
+                        if (slot < jadwal.length && kelasIdx < jadwal[slot].length) {
+                            String isi = jadwal[slot][kelasIdx];
+                            if (isi != null && !isi.isEmpty()) {
+                                guruId = isi.replaceAll("[^0-9]","");
+                                guruName = guruNama.getOrDefault(guruId, "");
+                                mapel = guruKelasMapel.getOrDefault(guruId+"|"+kelasIdx, "");
+                            }
+                        }
+                        guruCell(wb, row, 0, "",        fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 1, JAM_KE[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, WAKTU_BARIS[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 3, mapel,    fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 4, guruName, fN, WHITE, HorizontalAlignment.LEFT, true, true);
+                    }
+                }
+                if (startRow < rowIdx) {
+                    sheet.addMergedRegion(new CellRangeAddress(startRow, rowIdx-1, 0, 0));
+                    sheet.getRow(startRow).getCell(0).setCellValue(NAMA_HARI[h]);
+                    sheet.getRow(startRow).getCell(0).setCellStyle(guruStyle(wb, fB, LGRAY, HorizontalAlignment.CENTER, true, true));
+                }
+                sheet.createRow(rowIdx++).setHeightInPoints(6);
+            }
+            try (FileOutputStream fos = new FileOutputStream(outputPath)) { wb.write(fos); }
+        }
+    }
+
+    // =======================================================================
 // HELPER BERSAMA (guru + kelas)
 // =======================================================================
-    private static String[] buatDaftarKelas() {
+    static String[] buatDaftarKelas() {
         int n7 = SchedulerUI.kelasT7;
         int n8 = SchedulerUI.kelasT8;
         int n9 = SchedulerUI.kelasT9;
