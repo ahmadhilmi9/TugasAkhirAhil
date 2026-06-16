@@ -362,6 +362,7 @@ public class Main {
         }
         System.out.println("Total sisa beban: " + totalSisa);
         System.out.println("Total data: " + kebutuhan.size());
+        System.out.println("Pelanggaran total: " + hitungTotalSemuaPenalti(jadwal, hariRange, guruPJOK, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika));
 
         long mulai = System.nanoTime();
 
@@ -399,12 +400,12 @@ public class Main {
         System.out.println("Pelanggaran MGMP Selasa: " + hitungPenaltiMGMPSelasa(jadwal, hariRange, MGMPselasa));
         System.out.println("Pelanggaran MGMP Rabu: " + hitungPenaltiMGMPRabu(jadwal, hariRange, MGMPrabu));
         System.out.println("Pelanggaran MGMP Kamis: " + hitungPenaltiMGMPKamis(jadwal, hariRange, MGMPkamis));
-        System.out.println("Pelanggaran MGMP awal total: " + hitungTotalPenaltiMGMP(jadwal, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis));
+        System.out.println("Pelanggaran MGMP total: " + hitungTotalPenaltiMGMP(jadwal, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis));
         System.out.println("Pelanggaran Matematika: " + hitungPenaltiMatematika(jadwal, hariRange, guruMatematika));
         System.out.println("Pelanggaran jam 9&10: " + hitungPenaltiJam9dan10(jadwal, hariRange, 5));
         System.out.println("Pelanggaran bentrok: " + hitungBentrok(jadwal));
         System.out.println("Pelanggaran max jam per hari: " + hitungPenaltiMaxJamPerHari(jadwal, hariRange, 8, 2));
-        System.out.println("Pelanggaran total awal: " + hitungTotalSemuaPenalti(jadwal,
+        System.out.println("Pelanggaran total: " + hitungTotalSemuaPenalti(jadwal,
                 hariRange,
                 guruPJOK,
                 MGMPsenin,
@@ -425,7 +426,6 @@ public class Main {
         exportJadwalToExcel(jadwal, hariRange, SchedulerUI.outputFilePath, kebutuhan);
         SchedulerUI.setData(jadwal, hariRange, kebutuhan);
         SchedulerUI.markDone(true, null);
-
 
     }
 
@@ -2916,119 +2916,6 @@ public class Main {
 //        System.out.println("[swap3Random] gagal setelah " + maxPercobaan + " percobaan");
     }
 
-    static void swap2PJOK(String[][] jadwal, int[][] hariRange, Set<String> guruPJOK) {
-
-        Random rand = new Random();
-        int iterasi = 0;
-
-        while (iterasi < 1) {
-
-            int kelas = rand.nextInt(jadwal[0].length);
-
-            int r = rand.nextInt(jadwal.length);
-            int s = rand.nextInt(jadwal.length);
-
-            String guruA = jadwal[r][kelas];
-            String guruB = jadwal[s][kelas];
-
-            if (guruA.equals("") || guruB.equals("")) continue;
-
-            // salah satu harus PJOK
-            boolean aIsPJOK = guruPJOK.contains(guruA);
-            boolean bIsPJOK = guruPJOK.contains(guruB);
-            if (!aIsPJOK && !bIsPJOK) continue;
-
-            // pastikan yang PJOK ada di r, yang bukan di s
-            if (bIsPJOK && !aIsPJOK) {
-                // tukar r dan s agar A selalu PJOK
-                int tmp = r; r = s; s = tmp;
-                String tmpG = guruA; guruA = guruB; guruB = tmpG;
-            }
-
-            // ===== cari awal blok A =====
-            int startA = -1;
-
-            if (r < jadwal.length - 1 &&
-                    jadwal[r][kelas].equals(jadwal[r + 1][kelas]) &&
-                    getHari(r, hariRange) == getHari(r + 1, hariRange)) {
-                startA = r;
-            } else if (r > 0 &&
-                    jadwal[r][kelas].equals(jadwal[r - 1][kelas]) &&
-                    getHari(r, hariRange) == getHari(r - 1, hariRange)) {
-                startA = r - 1;
-            } else {
-                continue;
-            }
-
-            // ===== cari awal blok B =====
-            int startB = -1;
-
-            if (s < jadwal.length - 1 &&
-                    jadwal[s][kelas].equals(jadwal[s + 1][kelas]) &&
-                    getHari(s, hariRange) == getHari(s + 1, hariRange)) {
-                startB = s;
-            } else if (s > 0 &&
-                    jadwal[s][kelas].equals(jadwal[s - 1][kelas]) &&
-                    getHari(s, hariRange) == getHari(s - 1, hariRange)) {
-                startB = s - 1;
-            } else {
-                continue;
-            }
-
-            if (startA == startB) continue;
-            if (Math.abs(startA - startB) <= 1) continue;
-
-            // ===== cek blok A bukan bagian dari 3 berurutan =====
-            boolean aIsBlok3 = false;
-            if (startA - 1 >= 0 &&
-                    jadwal[startA - 1][kelas].equals(guruA) &&
-                    getHari(startA - 1, hariRange) == getHari(startA, hariRange)) {
-                aIsBlok3 = true;
-            }
-            if (startA + 2 < jadwal.length &&
-                    jadwal[startA + 2][kelas].equals(guruA) &&
-                    getHari(startA + 2, hariRange) == getHari(startA, hariRange)) {
-                aIsBlok3 = true;
-            }
-            if (aIsBlok3) continue;
-
-            // ===== cek blok B bukan bagian dari 3 berurutan =====
-            boolean bIsBlok3 = false;
-            if (startB - 1 >= 0 &&
-                    jadwal[startB - 1][kelas].equals(guruB) &&
-                    getHari(startB - 1, hariRange) == getHari(startB, hariRange)) {
-                bIsBlok3 = true;
-            }
-            if (startB + 2 < jadwal.length &&
-                    jadwal[startB + 2][kelas].equals(guruB) &&
-                    getHari(startB + 2, hariRange) == getHari(startB, hariRange)) {
-                bIsBlok3 = true;
-            }
-            if (bIsBlok3) continue;
-
-            if (guruA.equals(guruB)) continue;
-
-            int hariA = getHari(startA, hariRange);
-            int hariB = getHari(startB, hariRange);
-
-            // ===== blok B tidak boleh keluar dari jam ke-4 =====
-            int startHariB = hariRange[hariB][0];
-            int posisiB = startB - startHariB; // 0-based
-            if (posisiB > 3) continue; // jam ke-4 ke atas tidak boleh
-
-            if (guruSudahAdaDiHari(jadwal, kelas, guruA, hariB, hariRange)) continue;
-            if (guruSudahAdaDiHari(jadwal, kelas, guruB, hariA, hariRange)) continue;
-
-            // ===== swap blok =====
-            jadwal[startA][kelas] = guruB;
-            jadwal[startA + 1][kelas] = guruB;
-
-            jadwal[startB][kelas] = guruA;
-            jadwal[startB + 1][kelas] = guruA;
-
-            iterasi++;
-        }
-    }
 
     static void swap2Random(String[][] jadwal, int[][] hariRange) {
 
@@ -3603,36 +3490,6 @@ public class Main {
         }
     }
 
-    private static void swapHariSatuKelas(String[][] jadwal, int[][] hariRange) {
-        Random rand = new Random();
-
-        int kelas = rand.nextInt(jadwal[0].length);
-
-        int hari1 = rand.nextInt(hariRange.length);
-        int hari2;
-        do {
-            hari2 = rand.nextInt(hariRange.length);
-        } while (hari2 == hari1);
-
-        int start1 = hariRange[hari1][0];
-        int end1   = hariRange[hari1][1];
-        int start2 = hariRange[hari2][0];
-        int end2   = hariRange[hari2][1];
-
-        // Cek panjang hari harus sama
-        int panjang1 = end1 - start1;
-        int panjang2 = end2 - start2;
-        if (panjang1 != panjang2) return; // skip kalau beda
-
-        // Tukar slot per slot
-        for (int offset = 0; offset <= panjang1; offset++) {
-            String temp = jadwal[start1 + offset][kelas];
-            jadwal[start1 + offset][kelas] = jadwal[start2 + offset][kelas];
-            jadwal[start2 + offset][kelas] = temp;
-        }
-    }
-
-
     static String[][] copyJadwal(String[][] jadwal) {
         String[][] copy = new String[jadwal.length][];
 
@@ -3650,6 +3507,7 @@ public class Main {
             int[][] hariRange,
             Set<String> guruPJOK) {
 
+        iterasiGlobal[0] = 0;
         Random rand = new Random();
         Queue<Integer> tabuList = new LinkedList<>();
         int tabuSize = 2;
@@ -3661,7 +3519,7 @@ public class Main {
 
         int iterasi = 0;
 
-        //System.out.println("Penalti awal: " + penaltiSekarang);
+        System.out.println("Penalti awal: " + penaltiSekarang);
 
         while (iterasi < 1000000) {
             if (SchedulerUI.stopRequested) break;
@@ -3683,17 +3541,15 @@ public class Main {
             int move;
 
             do {
-                move = rand.nextInt(4);
+                move = rand.nextInt(3);
             } while (tabuList.contains(move));
 
             if (move == 0) {
                 swap1Random(neighbor, hariRange);
             } else if (move == 1) {
                 swap2WithSingle(neighbor, hariRange);
-            } else if (move == 2) {
+            } else {
                 swap3WithDoubleAndSingle(neighbor, hariRange);
-            }else{
-                swapHariSatuKelas(neighbor, hariRange);
             }
 
             tabuList.offer(move);
@@ -3741,6 +3597,7 @@ public class Main {
             int[][] hariRange,
             Set<String> guruPJOK) {
 
+        iterasiGlobal[0] = 0;
         Random rand = new Random();
         Queue<Integer> tabuList = new LinkedList<>();
         int tabuSize = 2;
@@ -3830,110 +3687,6 @@ public class Main {
         return current;
     }
 
-    static String[][] hillClimbingTabuSoftConstrain(
-            String[][] jadwal,
-            int[][] hariRange,
-            Set<String> guruPJOK,
-            Set<String> MGMPsenin,
-            Set<String> MGMPselasa,
-            Set<String> MGMPrabu,
-            Set<String> MGMPkamis,
-            Set<String> guruMatematika) {
-
-        Random rand = new Random();
-
-        String[][] current = copyJadwal(jadwal);
-
-        Queue<Integer> tabuList = new LinkedList<>();
-        int tabuSize = 2;
-
-        int penaltiSekarang = hitungTotalSemuaPenaltiSoftConstrain(current, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
-        int penaltiHardConstrainSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
-
-        int iterasi = 0;
-
-        System.out.println("Penalti awal: " + penaltiSekarang);
-
-        while (iterasi < 1000000) {
-            iterasi++;
-
-            if (SchedulerUI.stopRequested) {
-                System.out.println("» Stop diminta, keluar dari iterasi.");
-                break;
-            }
-            iterasiGlobal[0]++;
-
-            if (iterasiGlobal[0] % 20000 == 0) {
-                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Penalti: " + penaltiSekarang);
-            }
-
-            if (penaltiSekarang <= 0) {
-                System.out.println("Target tercapai");
-                break;
-            }
-
-            String[][] neighbor = copyJadwal(current);
-
-            //random
-
-
-            //tabu
-
-            int move;
-            do {
-                move = rand.nextInt(4);
-            } while (tabuList.contains(move));
-
-            if (move == 0) {
-                swap1Random(neighbor, hariRange);
-            } else if (move == 1) {
-                swap2Random(neighbor, hariRange);
-            } else if (move == 2) {
-                swap2WithSingle(neighbor, hariRange);
-            } else {
-                swapRotasiDouble(neighbor, hariRange);
-            }
-
-            tabuList.offer(move);
-            if (tabuList.size() > tabuSize) {
-                tabuList.poll();
-            }
-
-            int penaltiBaru = hitungTotalSemuaPenaltiSoftConstrain(neighbor, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
-            int penaltiHardConstrainBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
-
-//            System.out.println(
-//                    "Total: " + penaltiSekarang + " -> " + penaltiBaru +
-//                            " | PJOK: " + penaltiPJOKSekarang + " -> " + penaltiPJOKBaru
-//            );
-
-            if (penaltiBaru <= penaltiSekarang
-                    && penaltiHardConstrainBaru <= penaltiHardConstrainSekarang){
-
-                for (int i = 0; i < current.length; i++) {
-                    for (int j = 0; j < current[i].length; j++) {
-                        current[i][j] = neighbor[i][j];
-                    }
-                }
-                penaltiSekarang = penaltiBaru;
-                penaltiHardConstrainSekarang = penaltiHardConstrainBaru;
-
-//                System.out.println("Diterima");
-
-            } else {
-                for (int i = 0; i < neighbor.length; i++) {
-                    for (int j = 0; j < neighbor[i].length; j++) {
-                        neighbor[i][j] = current[i][j];
-                    }
-                }
-//                System.out.println("Ditolak");
-            }
-        }
-
-        System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
-        return current;
-    }
-
     static String[][] LAHCTabuSoftConstrain(
             String[][] jadwal,
             int[][] hariRange,
@@ -3944,6 +3697,7 @@ public class Main {
             Set<String> MGMPkamis,
             Set<String> guruMatematika) {
 
+        iterasiGlobal[0] = 0;
         Random rand = new Random();
 
         String[][] current = copyJadwal(jadwal);
@@ -4048,188 +3802,92 @@ public class Main {
     }
 
 
-    static String[][] hillClimbingRandomHardConstrain(
-            String[][] jadwal,
-            int[][] hariRange,
-            Set<String> guruPJOK) {
-
-        Random rand = new Random();
-
-        String[][] current = copyJadwal(jadwal);
-
-        int penaltiSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
-        int penaltiPJOKSekarang = hitungPenaltiPJOK(current, hariRange, guruPJOK);
-
-        int iterasi = 0;
-
-        System.out.println("Penalti awal: " + penaltiSekarang);
-
-        while (iterasi < 1000000) {
-            if (SchedulerUI.stopRequested) break;
-            iterasi++;
-            iterasiGlobal[0]++;
-
-            if (iterasiGlobal[0] % 20000 == 0) {
-                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Penalti: " + penaltiSekarang);
-            }
-
-            if (penaltiSekarang <= 0) {
-               System.out.println("Hard Constrain Optimal");
-
-                break;
-            }
-
-            String[][] neighbor = copyJadwal(current);
-
-            // random
-            int move = rand.nextInt(8);
-            if (move == 0) {
-                swap1Random(neighbor, hariRange);
-            } else if (move == 1) {
-                swap2Random(neighbor, hariRange);
-            } else if (move == 2) {
-                swap2WithSingle(neighbor, hariRange);
-            } else if (move == 3) {
-                swap3WithDoubleAndSingle(neighbor, hariRange);
-            }else if (move == 4){
-                swap2PJOK(neighbor, hariRange, guruPJOK);
-            }else if (move == 5) {
-                swapHariSatuKelas(neighbor, hariRange);
-            }else if (move == 6){
-                    swapRotasiDouble(neighbor, hariRange);
-            } else {
-                swap3Random(neighbor, hariRange);
-            }
-
-
-            int penaltiBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
-            int penaltiPJOKBaru = hitungPenaltiPJOK(neighbor, hariRange, guruPJOK);
-
-//            System.out.println(
-//                    "Total: " + penaltiSekarang + " -> " + penaltiBaru +
-//                            " | PJOK: " + penaltiPJOKSekarang + " -> " + penaltiPJOKBaru
-//            );
-
-            if (penaltiBaru <= penaltiSekarang
-                    && penaltiPJOKSekarang >= penaltiPJOKBaru){
-
-                for (int i = 0; i < current.length; i++) {
-                    for (int j = 0; j < current[i].length; j++) {
-                        current[i][j] = neighbor[i][j];
-                    }
-                }
-                penaltiSekarang = penaltiBaru;
-                penaltiPJOKSekarang = penaltiPJOKBaru;
-//                System.out.println("Diterima");
-
-            } else {
-                for (int i = 0; i < neighbor.length; i++) {
-                    for (int j = 0; j < neighbor[i].length; j++) {
-                        neighbor[i][j] = current[i][j];
-                    }
-                }
-//                System.out.println("Ditolak");
-            }
-        }
-        System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
-
-        return current;
-    }
-
-    static String[][] hillClimbingRandomSoftConstrain(
-            String[][] jadwal,
-            int[][] hariRange,
-            Set<String> guruPJOK,
-            Set<String> MGMPsenin,
-            Set<String> MGMPselasa,
-            Set<String> MGMPrabu,
-            Set<String> MGMPkamis,
-            Set<String> guruMatematika) {
-
-        Random rand = new Random();
-
-        String[][] current = copyJadwal(jadwal);
-
-        int penaltiSekarang = hitungTotalSemuaPenaltiSoftConstrain(current, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
-        int penaltiHardConstrainSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
-
-        int iterasi = 0;
-
-        System.out.println("Penalti awal: " + penaltiSekarang);
-
-        while (iterasi < 1000000) {
-            iterasi++;
-
-            if (SchedulerUI.stopRequested) {
-                System.out.println("» Stop diminta, keluar dari iterasi.");
-                break;
-            }
-            iterasiGlobal[0]++;
-
-            if (iterasiGlobal[0] % 20000 == 0) {
-                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Penalti: " + penaltiSekarang);
-            }
-
-            if (penaltiSekarang <= 0) {
-                System.out.println("Target tercapai");
-                break;
-            }
-
-            String[][] neighbor = copyJadwal(current);
-
-            //random
-            int move = rand.nextInt(7);
-            if (move == 0) {
-                swap1Random(neighbor, hariRange);
-            } else if (move == 1) {
-                swap2Random(neighbor, hariRange);
-            } else if (move == 2) {
-                swap2WithSingle(neighbor, hariRange);
-            } else if (move == 3) {
-                swap3WithDoubleAndSingle(neighbor, hariRange);
-            }else if (move == 4){
-                swap2PJOK(neighbor, hariRange, guruPJOK);
-            }else if (move == 5){
-                swapHariSatuKelas(neighbor, hariRange);
-            } else {
-                swap3Random(neighbor, hariRange);
-            }
-
-
-            int penaltiBaru = hitungTotalSemuaPenaltiSoftConstrain(neighbor, hariRange, MGMPsenin, MGMPselasa, MGMPrabu, MGMPkamis, guruMatematika);
-            int penaltiHardConstrainBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
-
-//            System.out.println(
-//                    "Total: " + penaltiSekarang + " -> " + penaltiBaru +
-//                            " | PJOK: " + penaltiPJOKSekarang + " -> " + penaltiPJOKBaru
-//            );
-
-            if (penaltiBaru <= penaltiSekarang
-                    && penaltiHardConstrainBaru<= penaltiHardConstrainSekarang){
-
-                for (int i = 0; i < current.length; i++) {
-                    for (int j = 0; j < current[i].length; j++) {
-                        current[i][j] = neighbor[i][j];
-                    }
-                }
-                penaltiSekarang = penaltiBaru;
-                penaltiHardConstrainSekarang = penaltiHardConstrainBaru;
-
-//                System.out.println("Diterima");
-
-            } else {
-                for (int i = 0; i < neighbor.length; i++) {
-                    for (int j = 0; j < neighbor[i].length; j++) {
-                        neighbor[i][j] = current[i][j];
-                    }
-                }
-//                System.out.println("Ditolak");
-            }
-        }
-
-        System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
-        return current;
-    }
-
+//    static String[][] hillClimbingRandomHardConstrain(
+//            String[][] jadwal,
+//            int[][] hariRange,
+//            Set<String> guruPJOK) {
+//
+//        Random rand = new Random();
+//
+//        String[][] current = copyJadwal(jadwal);
+//
+//        int penaltiSekarang = hitungTotalSemuaPenaltiHardConstrain(current, hariRange, guruPJOK);
+//        int penaltiPJOKSekarang = hitungPenaltiPJOK(current, hariRange, guruPJOK);
+//
+//        int iterasi = 0;
+//
+//        System.out.println("Penalti awal: " + penaltiSekarang);
+//
+//        while (iterasi < 1000000) {
+//            if (SchedulerUI.stopRequested) break;
+//            iterasi++;
+//            iterasiGlobal[0]++;
+//
+//            if (iterasiGlobal[0] % 20000 == 0) {
+//                System.out.println("[Iterasi " + iterasiGlobal[0] + "] Penalti: " + penaltiSekarang);
+//            }
+//
+//            if (penaltiSekarang <= 0) {
+//               System.out.println("Hard Constrain Optimal");
+//
+//                break;
+//            }
+//
+//            String[][] neighbor = copyJadwal(current);
+//
+//            // random
+//            int move = rand.nextInt(8);
+//            if (move == 0) {
+//                swap1Random(neighbor, hariRange);
+//            } else if (move == 1) {
+//                swap2Random(neighbor, hariRange);
+//            } else if (move == 2) {
+//                swap2WithSingle(neighbor, hariRange);
+//            } else if (move == 3) {
+//                swap3WithDoubleAndSingle(neighbor, hariRange);
+//            }else if (move == 4){
+//                swap2PJOK(neighbor, hariRange, guruPJOK);
+//            }else if (move == 5) {
+//                swapHariSatuKelas(neighbor, hariRange);
+//            }else if (move == 6){
+//                    swapRotasiDouble(neighbor, hariRange);
+//            } else {
+//                swap3Random(neighbor, hariRange);
+//            }
+//
+//
+//            int penaltiBaru = hitungTotalSemuaPenaltiHardConstrain(neighbor, hariRange, guruPJOK);
+//            int penaltiPJOKBaru = hitungPenaltiPJOK(neighbor, hariRange, guruPJOK);
+//
+////            System.out.println(
+////                    "Total: " + penaltiSekarang + " -> " + penaltiBaru +
+////                            " | PJOK: " + penaltiPJOKSekarang + " -> " + penaltiPJOKBaru
+////            );
+//
+//            if (penaltiBaru <= penaltiSekarang
+//                    && penaltiPJOKSekarang >= penaltiPJOKBaru){
+//
+//                for (int i = 0; i < current.length; i++) {
+//                    for (int j = 0; j < current[i].length; j++) {
+//                        current[i][j] = neighbor[i][j];
+//                    }
+//                }
+//                penaltiSekarang = penaltiBaru;
+//                penaltiPJOKSekarang = penaltiPJOKBaru;
+////                System.out.println("Diterima");
+//
+//            } else {
+//                for (int i = 0; i < neighbor.length; i++) {
+//                    for (int j = 0; j < neighbor[i].length; j++) {
+//                        neighbor[i][j] = current[i][j];
+//                    }
+//                }
+////                System.out.println("Ditolak");
+//            }
+//        }
+//        System.out.println("Selesai di iterasi global: " + iterasiGlobal[0] + " | Penalti akhir: " + penaltiSekarang);
+//
+//        return current;
+//    }
 
 }
