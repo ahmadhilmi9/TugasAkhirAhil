@@ -876,308 +876,8 @@ public class Main {
 
         try (Workbook wb = new XSSFWorkbook()) {
 
-            // ----- Warna background -----
-            final String GREEN   = "92D050"; // header kelas 7
-            final String YELLOW  = "FFFF00"; // header kelas 8
-            final String RED     = "FF0000"; // header kelas 9
-            final String ORANGE  = "FFC000"; // highlight nilai bentrok di kolom guru
-            final String LBLUE   = "BDD7EE"; // header KD/NAMA GURU/JML/HARI
-            final String WHITE   = "FFFFFF";
-            final String LGRAY   = "D9D9D9"; // baris Istirahat / Sholat
-
-            // ----- Style factory -----
-            // Semua cell pakai border tipis, wrap, center
-            Font fNormal = wb.createFont(); fNormal.setFontName("Arial"); fNormal.setFontHeightInPoints((short)9);
-            Font fBold   = wb.createFont(); fBold.setFontName("Arial");   fBold.setFontHeightInPoints((short)9); fBold.setBold(true);
-            Font fBoldWhite = wb.createFont(); fBoldWhite.setFontName("Arial"); fBoldWhite.setFontHeightInPoints((short)9); fBoldWhite.setBold(true); fBoldWhite.setColor(IndexedColors.WHITE.getIndex());
-
-            Sheet sheet = wb.createSheet("Jadwal");
-            sheet.setDefaultRowHeightInPoints(14);
-
-            String[] namaHari = {"Senin", "Selasa", "Rabu", "Kamis", "Jumat"};
-
-            // Nama kelas sesuai gambar: 7A-7H (8), 8A-8H (8), 9A-9G (7)
-            // Nama kelas dinamis dari input UI
-            int n7 = SchedulerUI.kelasT7;
-            int n8 = SchedulerUI.kelasT8;
-            int n9 = SchedulerUI.kelasT9;
-
-            String[] kelas7 = new String[n7];
-            for (int i = 0; i < n7; i++) kelas7[i] = "7" + (char)('A' + i);
-
-            String[] kelas8 = new String[n8];
-            for (int i = 0; i < n8; i++) kelas8[i] = "8" + (char)('A' + i);
-
-            String[] kelas9 = new String[n9];
-            for (int i = 0; i < n9; i++) kelas9[i] = "9" + (char)('A' + i);
-
-            int totalKelas = n7 + n8 + n9;
-
-            // Waktu jam ke- untuk tiap baris jadwal (index di jadwal[])
-            // Kita pakai label waktu sesuai gambar
-            String[] waktuLabel = {
-                    "06.30 - 07.15", // SHO (Sholat Duha) -- bukan jam KBM
-                    "07.15 - 07.55", // Jam 1
-                    "07.55 - 08.35", // Jam 2
-                    "08.35 - 09.15", // Jam 3
-                    "09.15 - 09.55", // Jam 4
-                    // ISTIRAHAT
-                    "10.25 - 11.05", // Jam 5
-                    "11.05 - 11.45", // Jam 6
-                    // ISTIRAHAT / SHOLAT JUMAT
-                    "12.20 - 13.00", // Jam 7
-                    "13.00 - 13.40", // Jam 8
-                    "13.40 - 14.20", // Jam 9
-                    "14.20 - 15.00", // Jam 10
-            };
-            // "Jam ke" label (null = bukan jam KBM)
-            String[] jamKeLabel = {"SHOLAT DHUHA","1","2","3","4",null,"5","6",null,"7","8","9","10"};
-
-            // Mapping guru: hitung berapa jam per hari
-            // Key = nomor guru (string angka), value = int[5] (hari 1-5)
-            Map<String, int[]> guruJam = new HashMap<>();
-
-            // Kumpulkan semua nomor guru
-            for (String[] row : jadwal) {
-                for (String cell : row) {
-                    if (cell != null && !cell.isEmpty()) {
-                        String num = cell.replaceAll("[^0-9]", "");
-                        if (!num.isEmpty()) guruJam.putIfAbsent(num, new int[5]);
-                    }
-                }
-            }
-            // Hitung jam per hari
-            for (int h = 0; h < hariRange.length; h++) {
-                int start = hariRange[h][0];
-                int end   = hariRange[h][1];
-                for (int r = start; r <= end; r++) {
-                    for (String cell : jadwal[r]) {
-                        if (cell != null && !cell.isEmpty()) {
-                            String num = cell.replaceAll("[^0-9]", "");
-                            if (!num.isEmpty()) {
-                                guruJam.computeIfAbsent(num, k -> new int[5]);
-                                guruJam.get(num)[h]++;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Urutkan guru berdasarkan nomor
-            List<String> guruList = new ArrayList<>(guruJam.keySet());
-            guruList.sort(Comparator.comparingInt(Integer::parseInt));
-
-            int COL_HARI  = 0;
-            int COL_WAKTU = 1;
-            int COL_JAM   = 2;
-            int COL_KELAS_START = 3;
-            int COL_KD    = COL_KELAS_START + totalKelas;
-            int COL_NAMA  = COL_KD + 1;
-            int COL_JML   = COL_NAMA + 1;
-            int COL_HARI1 = COL_JML + 1; // hari 1..5 = COL_HARI1..COL_HARI1+4
-
-            int rowIdx = 0;
-
-            // Row 0: "HARI" | "WAKTU" | "JAM KE" | KELAS (merge) x3 | KD | NAMA GURU | JML | HARI (merge)
-            Row hdr0 = sheet.createRow(rowIdx);
-            hdr0.setHeightInPoints(16);
-
-            setCell(wb, hdr0, COL_HARI,  "HARI",    fBold, WHITE,  HorizontalAlignment.CENTER, true);
-            setCell(wb, hdr0, COL_WAKTU, "WAKTU",   fBold, WHITE,  HorizontalAlignment.CENTER, true);
-            setCell(wb, hdr0, COL_JAM,   "JAM\nKE", fBold, WHITE,  HorizontalAlignment.CENTER, true);
-
-            // Merge "KELAS" header atas tiap grup
-            // Grup 7: col 3..10
-            setCell(wb, hdr0, COL_KELAS_START,               "KELAS", fBold, GREEN,  HorizontalAlignment.CENTER, true);
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START, COL_KELAS_START + kelas7.length - 1));
-
-            // Grup 8: col 11..18
-            setCell(wb, hdr0, COL_KELAS_START + kelas7.length, "KELAS", fBold, YELLOW, HorizontalAlignment.CENTER, true);
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START + kelas7.length, COL_KELAS_START + kelas7.length + kelas8.length - 1));
-
-            // Grup 9: col 19..25
-            setCell(wb, hdr0, COL_KELAS_START + kelas7.length + kelas8.length, "KELAS", fBold, RED, HorizontalAlignment.CENTER, true);
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START + kelas7.length + kelas8.length, COL_KELAS_START + totalKelas - 1));
-
-            setCell(wb, hdr0, COL_KD,   "KD",        fBold, LBLUE, HorizontalAlignment.CENTER, true);
-            setCell(wb, hdr0, COL_NAMA, "NAMA\nGURU",fBold, LBLUE, HorizontalAlignment.CENTER, true);
-            setCell(wb, hdr0, COL_JML,  "JML",       fBold, LBLUE, HorizontalAlignment.CENTER, true);
-
-            setCell(wb, hdr0, COL_HARI1, "HARI", fBold, LBLUE, HorizontalAlignment.CENTER, true);
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_HARI1, COL_HARI1 + 4));
-
-            rowIdx++;
-
-            // Row 1: sub-header nama kelas + KD/NAMA/JML/1/2/3/4/5
-            Row hdr1 = sheet.createRow(rowIdx);
-            hdr1.setHeightInPoints(14);
-
-            // HARI/WAKTU/JAMKE merge dua baris (0..1)
-            sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_HARI,  COL_HARI));
-            sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_WAKTU, COL_WAKTU));
-            sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_JAM,   COL_JAM));
-            sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_KD,    COL_KD));
-            sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_NAMA,  COL_NAMA));
-            sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_JML,   COL_JML));
-
-            for (int i = 0; i < kelas7.length; i++)
-                setCell(wb, hdr1, COL_KELAS_START + i, kelas7[i], fBold, GREEN, HorizontalAlignment.CENTER, true);
-            for (int i = 0; i < kelas8.length; i++)
-                setCell(wb, hdr1, COL_KELAS_START + kelas7.length + i, kelas8[i], fBold, YELLOW, HorizontalAlignment.CENTER, true);
-            for (int i = 0; i < kelas9.length; i++)
-                setCell(wb, hdr1, COL_KELAS_START + kelas7.length + kelas8.length + i, kelas9[i], fBold, RED, HorizontalAlignment.CENTER, true);
-
-            for (int d = 1; d <= 5; d++)
-                setCell(wb, hdr1, COL_HARI1 + d - 1, String.valueOf(d), fBold, LBLUE, HorizontalAlignment.CENTER, true);
-
-            rowIdx++;
-
-            // =====================================================================
-            // ISI JADWAL per HARI
-            // =====================================================================
-            // Kita juga perlu tahu max baris per hari untuk merge kolom guru
-            int guruRowStart = rowIdx; // baris mulai isi guru (kolom kanan)
-
-            // Struktur baris tiap hari: Sholat Duha + 4 jam + Istirahat + 2 jam + Istirahat/Jumat + 4 jam = 12 KBM + 2/3 istirahat + 1 duha
-            // Sesuai gambar: 13 baris per hari (termasuk header hari? tidak, header hari tidak ada di gambar utama)
-            // Dari gambar: tiap hari punya baris Sholat Duha + Jam1..4 + Istirahat + Jam5..6 + Istirahat + Jam7..10 = 1+4+1+2+1+4 = 13 baris
-            // Tapi di gambar Senin hanya ada 10 jam (baris Jam 1..10)
-
-            // Hitung jumlah baris per hari (untuk merge HARI)
-            // Tiap hari = 1(duha) + (end-start+1)(jam) + 1(istirahat setelah jam4) + 1(istirahat setelah jam6) = jam+3
-            // Tapi baris HARI di-merge vertikal
-
-            // Kita iterasi per hari
-            for (int h = 0; h < hariRange.length; h++) {
-                int start = hariRange[h][0];
-                int end   = hariRange[h][1];
-                int jamCount = end - start + 1;
-
-                int hariRowStart = rowIdx;
-
-                // Baris Sholat Duha
-                Row duhaRow = sheet.createRow(rowIdx);
-                duhaRow.setHeightInPoints(14);
-                setCell(wb, duhaRow, COL_WAKTU, "06.30 - 07.15", fNormal, WHITE, HorizontalAlignment.CENTER, false);
-                setCell(wb, duhaRow, COL_JAM,   "SHOLAT DHUHA",           fBold,   WHITE, HorizontalAlignment.CENTER, false);
-                for (int k = 0; k < totalKelas; k++)
-                    setCell(wb, duhaRow, COL_KELAS_START + k, "", fNormal, WHITE, HorizontalAlignment.CENTER, false);
-                // Kolom kanan kosong (akan diisi guru nanti)
-                rowIdx++;
-
-                // Waktu jam-ke
-                String[] waktuJam = {
-                        "07.15 - 07.55","07.55 - 08.35","08.35 - 09.15","09.15 - 09.55",
-                        "10.25 - 11.05","11.05 - 11.45",
-                        "12.20 - 13.00","13.00 - 13.40","13.40 - 14.20","14.20 - 15.00"
-                };
-                // Istirahat muncul setelah jam 4 (index 3) dan setelah jam 6 (index 5)
-
-                int jamKe = 0;
-                for (int r = start; r <= end; r++) {
-                    // Istirahat setelah jam ke-4
-                    if (jamKe == 4) {
-                        Row ist = sheet.createRow(rowIdx);
-                        ist.setHeightInPoints(14);
-                        setCell(wb, ist, COL_WAKTU, "09.55 - 10.25", fBold, LGRAY, HorizontalAlignment.CENTER, false);
-                        setCell(wb, ist, COL_JAM,   "",              fBold, LGRAY, HorizontalAlignment.CENTER, false);
-                        Cell istMerge = ist.createCell(COL_KELAS_START);
-                        istMerge.setCellValue("ISTIRAHAT");
-                        CellStyle istStyle = createStyle(wb, fBold, LGRAY, HorizontalAlignment.CENTER, true, true);
-                        istMerge.setCellStyle(istStyle);
-                        sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START, COL_KELAS_START + totalKelas - 1));
-                        rowIdx++;
-                    }
-                    // Istirahat/Sholat Jumat setelah jam ke-6
-                    if (jamKe == 6) {
-                        String label = (h == 4) ? "SHOLAT JUMAT" : "SHOLAT ZUHUR DAN KULTUM";
-                        Row ist2 = sheet.createRow(rowIdx);
-                        ist2.setHeightInPoints(14);
-                        setCell(wb, ist2, COL_WAKTU, "11.45 - 12.20", fBold, LGRAY, HorizontalAlignment.CENTER, false);
-                        setCell(wb, ist2, COL_JAM,   "",               fBold, LGRAY, HorizontalAlignment.CENTER, false);
-                        Cell ist2Merge = ist2.createCell(COL_KELAS_START);
-                        ist2Merge.setCellValue(label);
-                        ist2Merge.setCellStyle(createStyle(wb, fBold, LGRAY, HorizontalAlignment.CENTER, true, true));
-                        sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START, COL_KELAS_START + totalKelas - 1));
-                        rowIdx++;
-                    }
-
-                    Row row = sheet.createRow(rowIdx);
-                    row.setHeightInPoints(14);
-                    String wkt = (jamKe < waktuJam.length) ? waktuJam[jamKe] : "";
-                    setCell(wb, row, COL_WAKTU, wkt,              fNormal, WHITE, HorizontalAlignment.CENTER, false);
-                    setCell(wb, row, COL_JAM,   String.valueOf(jamKe + 1), fBold, WHITE, HorizontalAlignment.CENTER, false);
-                    for (int k = 0; k < totalKelas; k++) {
-                        String val = (r < jadwal.length && k < jadwal[r].length) ? jadwal[r][k] : "";
-                        if (val == null) val = "";
-                        setCell(wb, row, COL_KELAS_START + k, val, fNormal, WHITE, HorizontalAlignment.CENTER, false);
-                    }
-                    rowIdx++;
-                    jamKe++;
-                }
-
-                int hariRowEnd = rowIdx - 1;
-
-                // Merge kolom HARI vertikal
-                Row firstHariRow = sheet.getRow(hariRowStart);
-                setCell(wb, firstHariRow, COL_HARI, namaHari[h], fBold, WHITE, HorizontalAlignment.CENTER, true);
-                if (hariRowEnd > hariRowStart)
-                    sheet.addMergedRegion(new CellRangeAddress(hariRowStart, hariRowEnd, COL_HARI, COL_HARI));
-            }
-
-            // =====================================================================
-            // KOLOM KANAN: KD | NAMA GURU | JML | HARI 1-5
-            // Dimulai dari baris rowIdx=2 (setelah header 2 baris)
-            // Tiap guru = 1 baris
-            // =====================================================================
-            int guruIdx = 0;
-            for (String guru : guruList) {
-                int dataRow = guruRowStart + guruIdx;
-                Row row = sheet.getRow(dataRow);
-                if (row == null) row = sheet.createRow(dataRow);
-
-                int[] jams = guruJam.get(guru);
-                int total = Arrays.stream(jams).sum();
-
-                setCell(wb, row, COL_KD,   String.valueOf(guruIdx + 1), fNormal, WHITE, HorizontalAlignment.CENTER, false);
-                String namaGuruDisplay = "";
-                for (String[] data : kebutuhan) {
-                    if (data[0].replaceAll("[^0-9]", "").equals(guru)) {
-                        namaGuruDisplay = data[1];
-                        break;
-                    }
-                }
-                setCell(wb, row, COL_NAMA, namaGuruDisplay, fNormal, WHITE, HorizontalAlignment.LEFT, false);
-                setCell(wb, row, COL_JML,  String.valueOf(total),        fNormal, WHITE, HorizontalAlignment.CENTER, false);
-
-                // Max jam per hari untuk highlight
-                int maxJam = Arrays.stream(jams).max().orElse(0);
-
-                for (int d = 0; d < 5; d++) {
-                    String bg = (jams[d] == maxJam && maxJam > 0 && jams[d] >= 8) ? ORANGE : WHITE;
-                    setCell(wb, row, COL_HARI1 + d, String.valueOf(jams[d]), fNormal, bg, HorizontalAlignment.CENTER, false);
-                }
-                guruIdx++;
-            }
-
-            // =====================================================================
-            // LEBAR KOLOM
-            // =====================================================================
-            sheet.setColumnWidth(COL_HARI,  12 * 256);
-            sheet.setColumnWidth(COL_WAKTU, 16 * 256);
-            sheet.setColumnWidth(COL_JAM,    5 * 256);
-            for (int k = 0; k < totalKelas; k++)
-                sheet.setColumnWidth(COL_KELAS_START + k, 5 * 256);
-            sheet.setColumnWidth(COL_KD,    4  * 256);
-            sheet.setColumnWidth(COL_NAMA,  16 * 256);
-            sheet.setColumnWidth(COL_JML,   5  * 256);
-            for (int d = 0; d < 5; d++)
-                sheet.setColumnWidth(COL_HARI1 + d, 4 * 256);
-
-            // =====================================================================
-            // FREEZE panes: bekukan 2 baris header + 3 kolom kiri
-            // =====================================================================
-            sheet.createFreezePane(3, 2);
+            buildMainSheet(wb, "Jadwal", jadwal, hariRange, kebutuhan, false);
+            buildMainSheet(wb, "Jadwal (Deteksi)", jadwal, hariRange, kebutuhan, true);
 
             exportRekapMapel((XSSFWorkbook) wb, jadwal, kebutuhan);
             exportSheetGuru((XSSFWorkbook) wb, jadwal, hariRange, kebutuhan);
@@ -1192,6 +892,287 @@ public class Main {
         } else {
             SchedulerUI.markDone(true, null);
         }
+    }
+
+    static void buildMainSheet(Workbook wb, String sheetName, String[][] jadwal, int[][] hariRange,
+                               List<String[]> kebutuhan, boolean colored) {
+        final String GREEN   = "92D050";
+        final String YELLOW  = "FFFF00";
+        final String RED     = "FF0000";
+        final String ORANGE  = "FFC000";
+        final String LBLUE   = "BDD7EE";
+        final String WHITE   = "FFFFFF";
+        final String LGRAY   = "D9D9D9";
+
+        final String CELL_WHITE = "FFFFFF";
+        final String CELL_RED   = "FF6666";
+        final String CELL_YELLOW = "FFEE88";
+
+        Font fNormal = wb.createFont(); fNormal.setFontName("Arial"); fNormal.setFontHeightInPoints((short)9);
+        Font fBold   = wb.createFont(); fBold.setFontName("Arial");   fBold.setFontHeightInPoints((short)9); fBold.setBold(true);
+        Font fBoldWhite = wb.createFont(); fBoldWhite.setFontName("Arial"); fBoldWhite.setFontHeightInPoints((short)9); fBoldWhite.setBold(true); fBoldWhite.setColor(IndexedColors.WHITE.getIndex());
+
+        // Remove old sheet if exists
+        int idx = wb.getSheetIndex(sheetName);
+        if (idx >= 0) wb.removeSheetAt(idx);
+
+        Sheet sheet = wb.createSheet(sheetName);
+        sheet.setDefaultRowHeightInPoints(14);
+
+        String[] namaHari = {"Senin", "Selasa", "Rabu", "Kamis", "Jumat"};
+        int n7 = SchedulerUI.kelasT7;
+        int n8 = SchedulerUI.kelasT8;
+        int n9 = SchedulerUI.kelasT9;
+
+        String[] kelas7 = new String[n7];
+        for (int i = 0; i < n7; i++) kelas7[i] = "7" + (char)('A' + i);
+        String[] kelas8 = new String[n8];
+        for (int i = 0; i < n8; i++) kelas8[i] = "8" + (char)('A' + i);
+        String[] kelas9 = new String[n9];
+        for (int i = 0; i < n9; i++) kelas9[i] = "9" + (char)('A' + i);
+        int totalKelas = n7 + n8 + n9;
+
+        String[] waktuJam = {
+            "07.15 - 07.55","07.55 - 08.35","08.35 - 09.15","09.15 - 09.55",
+            "10.25 - 11.05","11.05 - 11.45",
+            "12.20 - 13.00","13.00 - 13.40","13.40 - 14.20","14.20 - 15.00"
+        };
+
+        // Build guru stats
+        Map<String, int[]> guruJam = new HashMap<>();
+        for (String[] row : jadwal) {
+            for (String cell : row) {
+                if (cell != null && !cell.isEmpty()) {
+                    String num = cell.replaceAll("[^0-9]", "");
+                    if (!num.isEmpty()) guruJam.putIfAbsent(num, new int[5]);
+                }
+            }
+        }
+        for (int h = 0; h < hariRange.length; h++) {
+            int start = hariRange[h][0];
+            int end   = hariRange[h][1];
+            for (int r = start; r <= end; r++) {
+                for (String cell : jadwal[r]) {
+                    if (cell != null && !cell.isEmpty()) {
+                        String num = cell.replaceAll("[^0-9]", "");
+                        if (!num.isEmpty()) {
+                            guruJam.computeIfAbsent(num, k -> new int[5]);
+                            guruJam.get(num)[h]++;
+                        }
+                    }
+                }
+            }
+        }
+        List<String> guruList = new ArrayList<>(guruJam.keySet());
+        guruList.sort(Comparator.comparingInt(Integer::parseInt));
+
+        int COL_HARI  = 0;
+        int COL_WAKTU = 1;
+        int COL_JAM   = 2;
+        int COL_KELAS_START = 3;
+        int COL_KD    = COL_KELAS_START + totalKelas;
+        int COL_NAMA  = COL_KD + 1;
+        int COL_JML   = COL_NAMA + 1;
+        int COL_HARI1 = COL_JML + 1;
+
+        int rowIdx = 0;
+
+        // Row 0 header
+        Row hdr0 = sheet.createRow(rowIdx);
+        hdr0.setHeightInPoints(16);
+        setCell(wb, hdr0, COL_HARI,  "HARI",    fBold, WHITE,  HorizontalAlignment.CENTER, true);
+        setCell(wb, hdr0, COL_WAKTU, "WAKTU",   fBold, WHITE,  HorizontalAlignment.CENTER, true);
+        setCell(wb, hdr0, COL_JAM,   "JAM\nKE", fBold, WHITE,  HorizontalAlignment.CENTER, true);
+
+        setCell(wb, hdr0, COL_KELAS_START,               "KELAS", fBold, GREEN,  HorizontalAlignment.CENTER, true);
+        sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START, COL_KELAS_START + kelas7.length - 1));
+        setCell(wb, hdr0, COL_KELAS_START + kelas7.length, "KELAS", fBold, YELLOW, HorizontalAlignment.CENTER, true);
+        sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START + kelas7.length, COL_KELAS_START + kelas7.length + kelas8.length - 1));
+        setCell(wb, hdr0, COL_KELAS_START + kelas7.length + kelas8.length, "KELAS", fBold, RED, HorizontalAlignment.CENTER, true);
+        sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START + kelas7.length + kelas8.length, COL_KELAS_START + totalKelas - 1));
+
+        setCell(wb, hdr0, COL_KD,   "KD",        fBold, LBLUE, HorizontalAlignment.CENTER, true);
+        setCell(wb, hdr0, COL_NAMA, "NAMA\nGURU",fBold, LBLUE, HorizontalAlignment.CENTER, true);
+        setCell(wb, hdr0, COL_JML,  "JML",       fBold, LBLUE, HorizontalAlignment.CENTER, true);
+        setCell(wb, hdr0, COL_HARI1, "HARI", fBold, LBLUE, HorizontalAlignment.CENTER, true);
+        sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_HARI1, COL_HARI1 + 4));
+        rowIdx++;
+
+        // Row 1 sub-header
+        Row hdr1 = sheet.createRow(rowIdx);
+        hdr1.setHeightInPoints(14);
+        sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_HARI,  COL_HARI));
+        sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_WAKTU, COL_WAKTU));
+        sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_JAM,   COL_JAM));
+        sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_KD,    COL_KD));
+        sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_NAMA,  COL_NAMA));
+        sheet.addMergedRegion(new CellRangeAddress(0, 1, COL_JML,   COL_JML));
+        for (int i = 0; i < kelas7.length; i++)
+            setCell(wb, hdr1, COL_KELAS_START + i, kelas7[i], fBold, GREEN, HorizontalAlignment.CENTER, true);
+        for (int i = 0; i < kelas8.length; i++)
+            setCell(wb, hdr1, COL_KELAS_START + kelas7.length + i, kelas8[i], fBold, YELLOW, HorizontalAlignment.CENTER, true);
+        for (int i = 0; i < kelas9.length; i++)
+            setCell(wb, hdr1, COL_KELAS_START + kelas7.length + kelas8.length + i, kelas9[i], fBold, RED, HorizontalAlignment.CENTER, true);
+        for (int d = 1; d <= 5; d++)
+            setCell(wb, hdr1, COL_HARI1 + d - 1, String.valueOf(d), fBold, LBLUE, HorizontalAlignment.CENTER, true);
+        rowIdx++;
+
+        // Build violation sets (needed for both sheets, only applied when colored)
+        Set<String> v_guruPJOK = new HashSet<>();
+        for (String[] d : kebutuhan) if (d[2].equalsIgnoreCase("PJOK")) v_guruPJOK.add(d[0]);
+
+        Set<String> v_MGMPsenin = new HashSet<>();
+        Set<String> v_MGMPselasa = new HashSet<>();
+        Set<String> v_MGMPrabu = new HashSet<>();
+        Set<String> v_MGMPkamis = new HashSet<>();
+        for (String[] d : kebutuhan) {
+            String ia = d[0], m = d[2];
+            if (m.equalsIgnoreCase("PKN") || m.equalsIgnoreCase("PJOK") || m.equalsIgnoreCase("IPS")) {
+                if (ia.matches(".*[a-zA-Z].*")) { if (ia.toLowerCase().contains("a")) v_MGMPsenin.add(ia.replaceAll("[^0-9]","")); }
+                else { v_MGMPsenin.add(ia); }
+            }
+            if (m.equalsIgnoreCase("B. INGGRIS") || m.equalsIgnoreCase("B. INDONESIA") || m.equalsIgnoreCase("B. JAWA")) {
+                if (ia.matches(".*[a-zA-Z].*")) { if (ia.toLowerCase().contains("a")) v_MGMPselasa.add(ia.replaceAll("[^0-9]","")); }
+                else { v_MGMPselasa.add(ia); }
+            }
+            if (m.equalsIgnoreCase("SKI") || m.equalsIgnoreCase("AQIDAH A.") || m.equalsIgnoreCase("B. ARAB") || m.equalsIgnoreCase("QURDITS") || m.equalsIgnoreCase("FIQIH")) {
+                if (ia.matches(".*[a-zA-Z].*")) { if (ia.toLowerCase().contains("a")) v_MGMPrabu.add(ia.replaceAll("[^0-9]","")); }
+                else { v_MGMPrabu.add(ia); }
+            }
+            if (m.equalsIgnoreCase("MATEMATIKA") || m.equalsIgnoreCase("IPA") || m.equalsIgnoreCase("BK") || m.equalsIgnoreCase("INFORMATIKA")) {
+                if (ia.matches(".*[a-zA-Z].*")) { if (ia.toLowerCase().contains("a")) v_MGMPkamis.add(ia.replaceAll("[^0-9]","")); }
+                else { v_MGMPkamis.add(ia); }
+            }
+        }
+
+        // Grid rows per day
+        int guruRowStart = rowIdx;
+        for (int h = 0; h < hariRange.length; h++) {
+            int start = hariRange[h][0];
+            int end   = hariRange[h][1];
+            int hariRowStart = rowIdx;
+
+            // Sholat Dhuha row — merged like Istirahat
+            Row duhaRow = sheet.createRow(rowIdx);
+            duhaRow.setHeightInPoints(14);
+            setCell(wb, duhaRow, COL_WAKTU, "06.30 - 07.15", fNormal, WHITE, HorizontalAlignment.CENTER, false);
+            setCell(wb, duhaRow, COL_JAM,   "SHOLAT DHUHA",  fBold,   WHITE, HorizontalAlignment.CENTER, false);
+            Cell duhaMerge = duhaRow.createCell(COL_KELAS_START);
+            duhaMerge.setCellValue("");
+            CellStyle duhaStyle = createStyle(wb, fNormal, WHITE, HorizontalAlignment.CENTER, false, true);
+            duhaMerge.setCellStyle(duhaStyle);
+            sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START, COL_KELAS_START + totalKelas - 1));
+            rowIdx++;
+
+            int jamKe = 0;
+            for (int r = start; r <= end; r++) {
+                if (jamKe == 4) {
+                    Row ist = sheet.createRow(rowIdx);
+                    ist.setHeightInPoints(14);
+                    setCell(wb, ist, COL_WAKTU, "09.55 - 10.25", fBold, LGRAY, HorizontalAlignment.CENTER, false);
+                    setCell(wb, ist, COL_JAM,   "",              fBold, LGRAY, HorizontalAlignment.CENTER, false);
+                    Cell istMerge = ist.createCell(COL_KELAS_START);
+                    istMerge.setCellValue("ISTIRAHAT");
+                    istMerge.setCellStyle(createStyle(wb, fBold, LGRAY, HorizontalAlignment.CENTER, true, true));
+                    sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START, COL_KELAS_START + totalKelas - 1));
+                    rowIdx++;
+                }
+                if (jamKe == 6) {
+                    String label = (h == 4) ? "SHOLAT JUMAT" : "SHOLAT ZUHUR DAN KULTUM";
+                    Row ist2 = sheet.createRow(rowIdx);
+                    ist2.setHeightInPoints(14);
+                    setCell(wb, ist2, COL_WAKTU, "11.45 - 12.20", fBold, LGRAY, HorizontalAlignment.CENTER, false);
+                    setCell(wb, ist2, COL_JAM,   "",               fBold, LGRAY, HorizontalAlignment.CENTER, false);
+                    Cell ist2Merge = ist2.createCell(COL_KELAS_START);
+                    ist2Merge.setCellValue(label);
+                    ist2Merge.setCellStyle(createStyle(wb, fBold, LGRAY, HorizontalAlignment.CENTER, true, true));
+                    sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, COL_KELAS_START, COL_KELAS_START + totalKelas - 1));
+                    rowIdx++;
+                }
+
+                Row row = sheet.createRow(rowIdx);
+                row.setHeightInPoints(14);
+                String wkt = (jamKe < waktuJam.length) ? waktuJam[jamKe] : "";
+                setCell(wb, row, COL_WAKTU, wkt, fNormal, WHITE, HorizontalAlignment.CENTER, false);
+                setCell(wb, row, COL_JAM,   String.valueOf(jamKe + 1), fBold, WHITE, HorizontalAlignment.CENTER, false);
+
+                // Count bentrok per slot
+                java.util.Map<String, Integer> slotCount = new java.util.HashMap<>();
+                for (int k = 0; k < totalKelas; k++) {
+                    String v = (r < jadwal.length && k < jadwal[r].length) ? jadwal[r][k] : "";
+                    if (v != null && !v.isEmpty()) {
+                        String num = v.replaceAll("[^0-9]", "");
+                        if (!num.isEmpty()) slotCount.merge(num, 1, Integer::sum);
+                    }
+                }
+
+                int p_jam = jamKe + 1;
+                for (int k = 0; k < totalKelas; k++) {
+                    String val = (r < jadwal.length && k < jadwal[r].length) ? jadwal[r][k] : "";
+                    if (val == null) val = "";
+                    String color = WHITE;
+                    if (colored && !val.isEmpty()) {
+                        String num = val.replaceAll("[^0-9]", "");
+                        boolean bentrok = slotCount.getOrDefault(num, 0) > 1;
+                        boolean mgmp = false;
+                        if (p_jam > 4) {
+                            if (h == 0) mgmp = v_MGMPsenin.contains(num);
+                            else if (h == 1) mgmp = v_MGMPselasa.contains(num);
+                            else if (h == 2) mgmp = v_MGMPrabu.contains(num);
+                            else if (h == 3) mgmp = v_MGMPkamis.contains(num);
+                        }
+                        if (bentrok) color = CELL_RED;
+                        else if (mgmp) color = CELL_YELLOW;
+                    }
+                    setCell(wb, row, COL_KELAS_START + k, val, fNormal, color, HorizontalAlignment.CENTER, false);
+                }
+                rowIdx++;
+                jamKe++;
+            }
+
+            int hariRowEnd = rowIdx - 1;
+            Row firstHariRow = sheet.getRow(hariRowStart);
+            setCell(wb, firstHariRow, COL_HARI, namaHari[h], fBold, WHITE, HorizontalAlignment.CENTER, true);
+            if (hariRowEnd > hariRowStart)
+                sheet.addMergedRegion(new CellRangeAddress(hariRowStart, hariRowEnd, COL_HARI, COL_HARI));
+        }
+
+        // Guru stats columns
+        int guruIdx = 0;
+        for (String guru : guruList) {
+            int dataRow = guruRowStart + guruIdx;
+            Row row = sheet.getRow(dataRow);
+            if (row == null) row = sheet.createRow(dataRow);
+            int[] jams = guruJam.get(guru);
+            int total = Arrays.stream(jams).sum();
+            setCell(wb, row, COL_KD,   String.valueOf(guruIdx + 1), fNormal, WHITE, HorizontalAlignment.CENTER, false);
+            String namaGuruDisplay = "";
+            for (String[] data : kebutuhan) {
+                if (data[0].replaceAll("[^0-9]", "").equals(guru)) {
+                    namaGuruDisplay = data[1]; break;
+                }
+            }
+            setCell(wb, row, COL_NAMA, namaGuruDisplay, fNormal, WHITE, HorizontalAlignment.LEFT, false);
+            setCell(wb, row, COL_JML,  String.valueOf(total), fNormal, WHITE, HorizontalAlignment.CENTER, false);
+            int maxJam = Arrays.stream(jams).max().orElse(0);
+            for (int d = 0; d < 5; d++) {
+                String bg = (jams[d] == maxJam && maxJam > 0 && jams[d] >= 8) ? ORANGE : WHITE;
+                setCell(wb, row, COL_HARI1 + d, String.valueOf(jams[d]), fNormal, bg, HorizontalAlignment.CENTER, false);
+            }
+            guruIdx++;
+        }
+
+        sheet.setColumnWidth(COL_HARI,  12 * 256);
+        sheet.setColumnWidth(COL_WAKTU, 16 * 256);
+        sheet.setColumnWidth(COL_JAM,    5 * 256);
+        for (int k = 0; k < totalKelas; k++)
+            sheet.setColumnWidth(COL_KELAS_START + k, 5 * 256);
+        sheet.setColumnWidth(COL_KD,    4  * 256);
+        sheet.setColumnWidth(COL_NAMA,  16 * 256);
+        sheet.setColumnWidth(COL_JML,   5  * 256);
+        for (int d = 0; d < 5; d++)
+            sheet.setColumnWidth(COL_HARI1 + d, 4 * 256);
+        sheet.createFreezePane(3, 2);
     }
 
     // =====================================================================
