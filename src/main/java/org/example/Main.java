@@ -871,6 +871,11 @@ public class Main {
         }
     }
 
+    private static final String[] WAKTU_JUMAT = {
+            "06.30 - 07.15","07.15 - 07.55","07.55 - 08.35","08.35 - 09.15","09.15 - 09.55",
+            "09.55 - 10.25","10.25 - 11.05","11.05 - 11.45","11.45 - 12.55",
+            "12.55 - 13.35","13.35 - 14.15","14.15 - 14.55","14.55 - 15.35"
+    };
 
     static void exportJadwalToExcel(String[][] jadwal, int[][] hariRange, String outputFile, List<String[]> kebutuhan) throws Exception {
 
@@ -1325,7 +1330,7 @@ public class Main {
                         String lblKhusus = sholatLabel(LBL_KHUSUS[b], h);
                         guruCell(wb, row, 0, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 1, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                        guruCell(wb, row, 2, WAKTU_BARIS[b],   fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]),   fN, CYAN, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 3, lblKhusus,        fB, CYAN, HorizontalAlignment.CENTER, true, true);
                         sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 3, 4));
                         guruCell(wb, row, 4, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
@@ -1345,7 +1350,7 @@ public class Main {
                         }
                         guruCell(wb, row, 0, "",        fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 1, JAM_KE[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                        guruCell(wb, row, 2, WAKTU_BARIS[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]), fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 3, kelas,    fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 4, mapel,    fN, WHITE, HorizontalAlignment.LEFT, true, true);
                     }
@@ -1493,7 +1498,7 @@ public class Main {
                         String lblKhusus = sholatLabel(LBL_KHUSUS[b], h);
                         guruCell(wb, row, 0, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 1, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                        guruCell(wb, row, 2, WAKTU_BARIS[b],   fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]),   fN, CYAN, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 3, lblKhusus,        fB, CYAN, HorizontalAlignment.CENTER, true, true);
                         sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 3, 4));
                         guruCell(wb, row, 4, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
@@ -1512,7 +1517,7 @@ public class Main {
                         }
                         guruCell(wb, row, 0, "",        fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 1, JAM_KE[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                        guruCell(wb, row, 2, WAKTU_BARIS[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]), fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 3, mapel,    fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 4, guruName, fN, WHITE, HorizontalAlignment.LEFT, true, true);
                     }
@@ -1676,7 +1681,7 @@ public class Main {
 
                 String hariLabel = NAMA_HARI[h];
                 String jamLabel  = JAM_KE[b] != null ? JAM_KE[b] : "";
-                String waktu     = WAKTU_BARIS[b];
+                String waktu     = (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]);
                 String kelas     = "";
                 String mapel     = "";
 
@@ -1746,7 +1751,7 @@ public class Main {
 
                 String hariLabel = NAMA_HARI[h];
                 String jamLabel  = JAM_KE[b] != null ? JAM_KE[b] : "";
-                String waktu     = WAKTU_BARIS[b];
+                String waktu     = (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]);
                 String mapel     = "";
                 String guruName  = "";
 
@@ -1875,7 +1880,7 @@ public class Main {
                         String lblKhusus = sholatLabel(LBL_KHUSUS[b], h);
                         guruCell(wb, row, 0, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 1, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                        guruCell(wb, row, 2, WAKTU_BARIS[b],   fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]),   fN, CYAN, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 3, lblKhusus,        fB, CYAN, HorizontalAlignment.CENTER, true, true);
                         sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 3, 4));
                         guruCell(wb, row, 4, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
@@ -1895,7 +1900,7 @@ public class Main {
                         }
                         guruCell(wb, row, 0, "",        fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 1, JAM_KE[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                        guruCell(wb, row, 2, WAKTU_BARIS[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]), fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 3, kelas,    fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 4, mapel,    fN, WHITE, HorizontalAlignment.LEFT, true, true);
                     }
@@ -1990,7 +1995,7 @@ public class Main {
                         String lblKhusus = sholatLabel(LBL_KHUSUS[b], h);
                         guruCell(wb, row, 0, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 1, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
-                        guruCell(wb, row, 2, WAKTU_BARIS[b],   fN, CYAN, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]),   fN, CYAN, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 3, lblKhusus,        fB, CYAN, HorizontalAlignment.CENTER, true, true);
                         sheet.addMergedRegion(new CellRangeAddress(rowIdx-1, rowIdx-1, 3, 4));
                         guruCell(wb, row, 4, "",               fN, CYAN, HorizontalAlignment.CENTER, true, true);
@@ -2009,7 +2014,7 @@ public class Main {
                         }
                         guruCell(wb, row, 0, "",        fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 1, JAM_KE[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
-                        guruCell(wb, row, 2, WAKTU_BARIS[b], fN, WHITE, HorizontalAlignment.CENTER, true, true);
+                        guruCell(wb, row, 2, (h == 4 ? WAKTU_JUMAT[b] : WAKTU_BARIS[b]), fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 3, mapel,    fN, WHITE, HorizontalAlignment.CENTER, true, true);
                         guruCell(wb, row, 4, guruName, fN, WHITE, HorizontalAlignment.LEFT, true, true);
                     }
