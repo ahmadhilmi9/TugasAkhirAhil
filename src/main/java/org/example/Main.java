@@ -844,6 +844,11 @@ public class Main {
             "10.25 - 11.05","11.05 - 11.45",
             "12.20 - 13.00","13.00 - 13.40","13.40 - 14.20","14.20 - 15.00"
         };
+        String[] waktuJamJumat = {
+            "07.15 - 07.55","07.55 - 08.35","08.35 - 09.15","09.15 - 09.55",
+            "10.25 - 11.05","11.05 - 11.45",
+            "12.55 - 13.35","13.35 - 14.15","14.15 - 14.55","14.55 - 15.35"
+        };
 
         // Build guru stats
         Map<String, int[]> guruJam = new HashMap<>();
@@ -988,7 +993,7 @@ public class Main {
                     String label = (h == 4) ? "SHOLAT JUMAT" : "SHOLAT ZUHUR DAN KULTUM";
                     Row ist2 = sheet.createRow(rowIdx);
                     ist2.setHeightInPoints(14);
-                    setCell(wb, ist2, COL_WAKTU, "11.45 - 12.20", fBold, LGRAY, HorizontalAlignment.CENTER, false);
+                    setCell(wb, ist2, COL_WAKTU, h == 4 ? "11.45 - 12.55" : "11.45 - 12.20", fBold, LGRAY, HorizontalAlignment.CENTER, false);
                     setCell(wb, ist2, COL_JAM,   "",               fBold, LGRAY, HorizontalAlignment.CENTER, false);
                     Cell ist2Merge = ist2.createCell(COL_KELAS_START);
                     ist2Merge.setCellValue(label);
@@ -999,7 +1004,8 @@ public class Main {
 
                 Row row = sheet.createRow(rowIdx);
                 row.setHeightInPoints(14);
-                String wkt = (jamKe < waktuJam.length) ? waktuJam[jamKe] : "";
+                String[] wkJumat = (h == 4) ? waktuJamJumat : waktuJam;
+                String wkt = (jamKe < wkJumat.length) ? wkJumat[jamKe] : "";
                 setCell(wb, row, COL_WAKTU, wkt, fNormal, WHITE, HorizontalAlignment.CENTER, false);
                 setCell(wb, row, COL_JAM,   String.valueOf(jamKe + 1), fBold, WHITE, HorizontalAlignment.CENTER, false);
 
