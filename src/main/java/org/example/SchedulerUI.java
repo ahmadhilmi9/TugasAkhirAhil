@@ -10,6 +10,10 @@ import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
@@ -33,6 +37,8 @@ public class SchedulerUI extends JFrame {
     public static int     jamJumat       = 8;
 
     public static volatile boolean stopRequested = false;
+
+    public static Map<String, Set<Integer>> requestGuruHariTidakBoleh = new LinkedHashMap<>();
 
     // Data dari Main setelah generate selesai
     public static String[][]   scheduleJadwal;
@@ -86,6 +92,13 @@ public class SchedulerUI extends JFrame {
     private JLabel       lblStatus;
     private JProgressBar progressBar;
     private JPanel       pnlResult;
+
+    // Request guru components
+    private JTable       tblRequests;
+    private DefaultTableModel requestTableModel;
+    private JButton      btnTambahRequest;
+    private JButton      btnHapusRequest;
+    private java.util.List<String[]> requestDataList = new java.util.ArrayList<>();
 
     // Navigation state for Per Guru & Per Kelas tabs
     private int          currentGuruIdx    = 0;
@@ -416,8 +429,201 @@ public class SchedulerUI extends JFrame {
             hariGrid.add(buildSpinnerCard(hariNames[i], C_SUBTEXT, minus, hariValLabel[i], plus));
         }
         p.add(hariGrid);
+        p.add(box(16));
+
+        // ============ Request Hari Tidak Boleh ============
+        p.add(sectionLabel("Request Hari Tidak Boleh Mengajar"));
+
+        JLabel reqDesc = new JLabel("Tentukan guru yang tidak boleh mengajar di hari tertentu");
+        reqDesc.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        reqDesc.setForeground(C_SUBTEXT);
+        reqDesc.setAlignmentX(Component.LEFT_ALIGNMENT);
+        p.add(reqDesc);
+        p.add(box(8));
+
+        btnTambahRequest = new JButton("+ Tambah Request Baru");
+        btnTambahRequest.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        btnTambahRequest.setBackground(C_PRIMARY);
+        btnTambahRequest.setForeground(Color.WHITE);
+        btnTambahRequest.setOpaque(true);
+        btnTambahRequest.setFocusPainted(false);
+        btnTambahRequest.setBorderPainted(false);
+        btnTambahRequest.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btnTambahRequest.setAlignmentX(Component.LEFT_ALIGNMENT);
+        btnTambahRequest.addActionListener(e -> showRequestDialog());
+        inputComponents.add(btnTambahRequest);
+        p.add(btnTambahRequest);
+        p.add(box(8));
+
+        requestTableModel = new DefaultTableModel(
+            new String[]{"No", "ID Guru", "Nama Guru", "Hari Larangan"}, 0
+        ) {
+            @Override public boolean isCellEditable(int row, int column) { return false; }
+        };
+        tblRequests = new JTable(requestTableModel);
+        tblRequests.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        tblRequests.setRowHeight(24);
+        tblRequests.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 11));
+        tblRequests.getSelectionModel().setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        JScrollPane scrollReq = new JScrollPane(tblRequests);
+        scrollReq.setAlignmentX(Component.LEFT_ALIGNMENT);
+        scrollReq.setPreferredSize(new Dimension(0, 120));
+        p.add(scrollReq);
+        p.add(box(4));
+
+        JPanel reqBtnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        reqBtnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        reqBtnRow.setOpaque(false);
+
+        btnHapusRequest = new JButton("Hapus Terpilih");
+        btnHapusRequest.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        btnHapusRequest.setForeground(new Color(220, 38, 38));
+        btnHapusRequest.setBackground(new Color(254, 242, 242));
+        btnHapusRequest.setFocusPainted(false);
+        btnHapusRequest.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(252, 165, 165), 1, true),
+                BorderFactory.createEmptyBorder(4, 10, 4, 10)));
+        btnHapusRequest.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btnHapusRequest.addActionListener(e -> hapusRequestTerpilih());
+        inputComponents.add(btnHapusRequest);
+        reqBtnRow.add(btnHapusRequest);
+        p.add(reqBtnRow);
 
         return card(p);
+    }
+
+    // -- Request Guru helpers ------------------------------------------------
+    private void showRequestDialog() {
+        String filePath = tfInputFile.getText().trim();
+        if (filePath.isEmpty() || filePath.startsWith("Belum")) {
+            JOptionPane.showMessageDialog(this, "Pilih file Excel input terlebih dahulu.", "File belum dipilih", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        File f = new File(filePath);
+        if (!f.exists()) {
+            JOptionPane.showMessageDialog(this, "File input tidak ditemukan:\n" + filePath, "File tidak ada", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        Map<String, String> teacherMap = Main.parseAvailableTeachers(filePath);
+        if (teacherMap.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Tidak dapat membaca data guru dari file Excel.", "Gagal parse", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        java.util.List<String[]> teacherList = new java.util.ArrayList<>();
+        for (Map.Entry<String, String> e : teacherMap.entrySet()) {
+            teacherList.add(new String[]{e.getKey(), e.getValue()});
+        }
+
+        JDialog dialog = new JDialog(this, "Tambah Request Guru", true);
+        dialog.setLayout(new BorderLayout(10, 10));
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(16, 16, 8, 16));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(4, 4, 4, 4);
+
+        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
+        form.add(new JLabel("Pilih Guru:"), gbc);
+
+        gbc.gridx = 1; gbc.weightx = 1;
+        JComboBox<String> cbTeacher = new JComboBox<>();
+        for (String[] t : teacherList) {
+            cbTeacher.addItem(t[0] + "  -  " + t[1]);
+        }
+        form.add(cbTeacher, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
+        form.add(new JLabel("Hari larangan:"), gbc);
+
+        gbc.gridx = 1; gbc.weightx = 1;
+        JPanel hariPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        String[] hariNama = {"Senin", "Selasa", "Rabu", "Kamis", "Jumat"};
+        JCheckBox[] cbHari = new JCheckBox[5];
+        for (int i = 0; i < 5; i++) {
+            cbHari[i] = new JCheckBox(hariNama[i]);
+            hariPanel.add(cbHari[i]);
+        }
+        form.add(hariPanel, gbc);
+
+        dialog.add(form, BorderLayout.CENTER);
+
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
+        JButton btnBatal = new JButton("Batal");
+        btnBatal.addActionListener(e -> dialog.dispose());
+
+        JButton btnSimpan = new JButton("Simpan");
+        btnSimpan.setBackground(C_PRIMARY);
+        btnSimpan.setForeground(Color.WHITE);
+        btnSimpan.setOpaque(true);
+        btnSimpan.setFocusPainted(false);
+        btnSimpan.setBorderPainted(false);
+        btnSimpan.addActionListener(e -> {
+            int idx = cbTeacher.getSelectedIndex();
+            if (idx < 0) {
+                JOptionPane.showMessageDialog(dialog, "Pilih guru terlebih dahulu.", "Input Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            String id = teacherList.get(idx)[0];
+            String nama = teacherList.get(idx)[1];
+            Set<Integer> hariSet = new HashSet<>();
+            for (int i = 0; i < 5; i++) {
+                if (cbHari[i].isSelected()) hariSet.add(i);
+            }
+            if (hariSet.isEmpty()) {
+                JOptionPane.showMessageDialog(dialog, "Pilih minimal satu hari larangan.", "Input Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            requestGuruHariTidakBoleh.put(id, hariSet);
+            requestDataList.add(new String[]{id, nama});
+            refreshRequestTable();
+            dialog.dispose();
+        });
+
+        btnPanel.add(btnBatal);
+        btnPanel.add(btnSimpan);
+        dialog.add(btnPanel, BorderLayout.SOUTH);
+
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
+    private void hapusRequestTerpilih() {
+        int row = tblRequests.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Pilih baris yang ingin dihapus.", "Tidak ada pilihan", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(this, "Hapus request guru ini?", "Konfirmasi", JOptionPane.YES_NO_OPTION);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        String id = (String) requestTableModel.getValueAt(row, 1);
+        requestGuruHariTidakBoleh.remove(id);
+        requestDataList.remove(row);
+        refreshRequestTable();
+    }
+
+    private void refreshRequestTable() {
+        String[] hariNama = {"Senin", "Selasa", "Rabu", "Kamis", "Jumat"};
+        requestTableModel.setRowCount(0);
+        int i = 1;
+        for (String[] entry : requestDataList) {
+            String id = entry[0];
+            String nama = entry[1];
+            Set<Integer> days = requestGuruHariTidakBoleh.get(id);
+            if (days == null) continue;
+            StringBuilder sb = new StringBuilder();
+            for (int d : days) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(hariNama[d]);
+            }
+            requestTableModel.addRow(new Object[]{i++, id, nama, sb.toString()});
+        }
     }
 
     // -- Action card ----------------------------------------------------------
@@ -892,6 +1098,22 @@ public class SchedulerUI extends JFrame {
         appendLog("  Output  : " + outputFilePath, LOG_TEXT);
         appendLog("  Kelas   : " + jumlahKelas + " total  (7=" + kelasT7 + ", 8=" + kelasT8 + ", 9=" + kelasT9 + ")", LOG_TEXT);
         appendLog(String.format("  Jam     : Sn=%d Se=%d Ra=%d Ka=%d Jm=%d", jamSenin, jamSelasa, jamRabu, jamKamis, jamJumat), LOG_TEXT);
+        if (!requestGuruHariTidakBoleh.isEmpty()) {
+            appendLog("  Request : " + requestGuruHariTidakBoleh.size() + " guru dilarang", LOG_TEXT);
+            String[] hariNama = {"Senin", "Selasa", "Rabu", "Kamis", "Jumat"};
+            for (Map.Entry<String, Set<Integer>> entry : requestGuruHariTidakBoleh.entrySet()) {
+                String nama = "";
+                for (String[] d : requestDataList) {
+                    if (d[0].equals(entry.getKey())) { nama = d[1]; break; }
+                }
+                StringBuilder sb = new StringBuilder();
+                for (int d : entry.getValue()) {
+                    if (sb.length() > 0) sb.append(", ");
+                    sb.append(hariNama[d]);
+                }
+                appendLog("    - ID " + entry.getKey() + " (" + nama + "): " + sb, LOG_TEXT);
+            }
+        }
         appendLog("-".repeat(52), C_MUTED);
 
         schedulerThread = new Thread(() -> {
